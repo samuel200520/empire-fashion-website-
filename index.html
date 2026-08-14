@@ -113,6 +113,13 @@
             <button class="close-btn" onclick="hideCheckoutForm()">&times;</button>
             <h2>Complete Your Order</h2>
             <div id="checkout-summary"></div>
+            <div id="checkout-success" style="display:none; text-align:center; padding:20px 0;">
+                <div style="font-size:60px;">✅</div>
+                <h3 style="margin:15px 0 5px; color:#111;">Order Placed!</h3>
+                <p style="font-size:18px; color:#111;">Your order number is <strong id="success-order-id" style="color:#D4AF37;"></strong></p>
+                <p style="color:#777;">We will contact you on WhatsApp shortly to confirm delivery.</p>
+                <button type="button" class="checkout-btn" style="width:100%; margin-top:15px;" onclick="hideCheckoutForm()">Continue Shopping</button>
+            </div>
             <form id="checkout-form">
                 <div class="form-group">
                     <label>Full Name *</label>
@@ -131,6 +138,9 @@
                     <input type="text" id="cust-address" required placeholder="House no, Street, Area">
                 </div>
                 <button type="submit" class="checkout-btn" style="width:100%; margin-top:10px;">Place Order</button>
+                <button type="button" class="whatsapp-order-btn" onclick="orderViaWhatsApp()">
+                    <span style="font-size:18px;">🟢</span> Order via WhatsApp instead
+                </button>
             </form>
         </div>
     </div>

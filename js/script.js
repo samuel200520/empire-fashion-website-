@@ -1,6 +1,23 @@
 const API_URL = "";
+
+// The store's own WhatsApp number (with country code, digits only).
+// Replace with your real number, e.g. "23276123456"
+const STORE_WHATSAPP = "232XXXXXXXXX";
+
 let cart = [];
 let storeProducts = [];
+
+// Cart survives page refreshes via localStorage
+function saveCart() {
+    localStorage.setItem('empire_cart', JSON.stringify(cart));
+}
+function loadCart() {
+    try {
+        cart = JSON.parse(localStorage.getItem('empire_cart') || '[]');
+    } catch (e) {
+        cart = [];
+    }
+}
 
 // Safe HTML escaping to prevent XSS
 function esc(str) {
@@ -84,6 +101,7 @@ function updateCartUI() {
     cartCount.innerText = cart.length;
     let total = cart.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
     cartTotal.innerText = `NLE ${total.toFixed(2)}`;
+    saveCart();
 }
 
 // 3. Toggle Cart
@@ -106,6 +124,11 @@ function showCheckoutForm() {
             <br><strong style="font-size:18px; margin-top:8px; display:inline-block;">Total: NLE ${total.toFixed(2)}</strong>
         </div>
     `;
+    // Reset to form state (in case a previous order showed the success screen)
+    document.getElementById('checkout-success').style.display = 'none';
+    document.getElementById('checkout-form').style.display = 'block';
+    summary.style.display = 'block';
+
     document.getElementById('checkout-modal').style.display = 'flex';
     document.getElementById('checkout-overlay').style.display = 'block';
 }
@@ -113,6 +136,31 @@ function showCheckoutForm() {
 function hideCheckoutForm() {
     document.getElementById('checkout-modal').style.display = 'none';
     document.getElementById('checkout-overlay').style.display = 'none';
+}
+
+// Order via WhatsApp: send cart to the store's WhatsApp and let them confirm manually
+function orderViaWhatsApp() {
+    if (cart.length === 0) {
+        alert("Your cart is empty!");
+        return;
+    }
+    const name = document.getElementById('cust-name').value.trim();
+    const phone = document.getElementById('cust-phone').value.trim();
+    const address = document.getElementById('cust-address').value.trim();
+    const total = cart.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
+
+    let msg = `Hello Empire Fashion House! I want to place an order:\n\n`;
+    cart.forEach(item => { msg += `• ${item.name} - NLE ${item.price}\n`; });
+    msg += `\nTotal: NLE ${total.toFixed(2)}`;
+    if (name) msg += `\n\nName: ${name}`;
+    if (phone) msg += `\nPhone: ${phone}`;
+    if (address) msg += `\nAddress: ${address}`;
+
+    if (STORE_WHATSAPP === "232XXXXXXXXX") {
+        alert("Store WhatsApp number not set yet. Ask the developer to set STORE_WHATSAPP in js/script.js");
+        return;
+    }
+    window.open(`https://wa.me/${STORE_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 // 5. Mobile Nav & Category Filtering
@@ -192,7 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const amount = cart.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
 
         try {
-            await fetch(`${API_URL}/api/orders`, {
+            const res = await fetch(`${API_URL}/api/orders`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -204,12 +252,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     amount
                 })
             });
+            if (!res.ok) throw new Error('Server rejected the order');
+            const order = await res.json();
 
-            alert("Order placed successfully! Thank you for shopping with Empire Fashion House.");
+            // Show success screen with the real order number from the server
+            document.getElementById('success-order-id').innerText = `#EMP${order.id}`;
+            document.getElementById('checkout-form').style.display = 'none';
+            document.getElementById('checkout-summary').style.display = 'none';
+            document.getElementById('checkout-success').style.display = 'block';
+
             cart = [];
             updateCartUI();
-            toggleCart();
-            hideCheckoutForm();
             document.getElementById('checkout-form').reset();
         } catch (error) {
             console.error("Checkout failed:", error);
@@ -217,5 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    loadCart();
+    updateCartUI();
     loadStorefront();
 });

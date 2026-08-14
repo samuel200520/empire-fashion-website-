@@ -504,3 +504,19 @@ body.dark-mode .cat-badge { color: var(--primary-gold); }
     transition: 0.2s;
 }
 .btn-secondary:hover { border-color: var(--danger); color: var(--danger); }
+
+/* WhatsApp order button (checkout modal) */
+.whatsapp-order-btn {
+    width: 100%;
+    padding: 13px;
+    margin-top: 10px;
+    background-color: #25D366;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    font-size: 15px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+.whatsapp-order-btn:hover { background-color: #1ebe57; }
