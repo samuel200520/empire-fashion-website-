@@ -2,7 +2,7 @@ const API_URL = "";
 
 // The store's own WhatsApp number (with country code, digits only).
 // Replace with your real number, e.g. "23276123456"
-const STORE_WHATSAPP = "232XXXXXXXXX";
+const STORE_WHATSAPP = "23233600560";
 
 let cart = [];
 let storeProducts = [];
