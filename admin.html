@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Empire Admin - Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="light-mode">
+
+    <div class="app-wrapper">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/images/logo.jpeg" alt="Logo" class="sidebar-logo">
+                <h2 class="sidebar-title">EMPIRE<span>FH</span></h2>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" onclick="switchView('dashboard', event)"><i class="fas fa-home"></i> <span>Dashboard</span></a>
+                <a href="#" class="nav-item" onclick="switchView('orders', event)"><i class="fas fa-shopping-cart"></i> <span>Orders</span><span class="nav-badge" id="orders-badge"></span></a>
+                <a href="#" class="nav-item" onclick="switchView('products', event)"><i class="fas fa-box"></i> <span>Products</span></a>
+                <a href="#" class="nav-item" onclick="switchView('customers', event)"><i class="fas fa-users"></i> <span>Customers</span></a>
+                <a href="#" class="nav-item" onclick="switchView('settings', event)"><i class="fas fa-cog"></i> <span>Settings</span></a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="/" class="nav-item"><i class="fas fa-store"></i> <span>View Store</span></a>
+                <a href="#" class="nav-item" onclick="logout()"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></a>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="icon-btn" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+                    <div class="search-bar">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="search-input" placeholder="Search orders, products, customers...">
+                    </div>
+                </div>
+                <div class="topbar-right">
+                    <button class="icon-btn" onclick="toggleTheme()"><i class="fas fa-moon" id="theme-icon"></i></button>
+                    <button class="icon-btn" id="bell-btn" onclick="switchView('orders', event)" title="Pending orders" style="position:relative;">
+                        <i class="fas fa-bell"></i>
+                        <span class="notif-badge" id="notif-badge"></span>
+                    </button>
+                    <div class="profile-dropdown">
+                        <img src="https://ui-avatars.com/api/?background=111111&color=D4AF37&name=Ezekiel" alt="Admin">
+                        <div class="profile-info">
+                            <span class="name">Ezekiel</span>
+                            <span class="role">Super Admin</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard View -->
+            <section id="view-dashboard" class="content-view active">
+                <div class="page-header">
+                    <div>
+                        <h1>Welcome back, Ezekiel 👋</h1>
+                        <p>Here's what's happening with your store today.</p>
+                    </div>
+                    <button class="btn-primary" onclick="switchView('products', event)"><i class="fas fa-plus"></i> Add Product</button>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon revenue"><i class="fas fa-dollar-sign"></i></div>
+                        <div class="stat-info">
+                            <h3>Total Revenue</h3>
+                            <p class="number" id="kpi-revenue">NLE 0</p>
+                            <span class="trend up" id="kpi-trend-revenue"><i class="fas fa-arrow-up"></i> --</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon orders"><i class="fas fa-shopping-bag"></i></div>
+                        <div class="stat-info">
+                            <h3>Total Orders</h3>
+                            <p class="number" id="kpi-orders">0</p>
+                            <span class="trend up" id="kpi-trend-orders"><i class="fas fa-arrow-up"></i> --</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon customers"><i class="fas fa-users"></i></div>
+                        <div class="stat-info">
+                            <h3>Total Customers</h3>
+                            <p class="number" id="kpi-customers">0</p>
+                            <span class="trend up" id="kpi-trend-customers"><i class="fas fa-arrow-up"></i> --</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon products"><i class="fas fa-boxes"></i></div>
+                        <div class="stat-info">
+                            <h3>Products Sold</h3>
+                            <p class="number" id="kpi-products">0</p>
+                            <span class="trend down" id="kpi-trend-products"><i class="fas fa-arrow-down"></i> --</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-card large">
+                        <div class="chart-header">
+                            <h3>Revenue - Last 7 Days</h3>
+                        </div>
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <h3>Sales by Category</h3>
+                        </div>
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="data-card">
+                    <div class="card-header">
+                        <h3>Recent Orders</h3>
+                        <button class="btn-text" onclick="switchView('orders', event)">View All</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Order ID</th>
+                                    <th>Customer</th>
+                                    <th>Product</th>
+                                    <th>Amount</th>
+                                    <th>Date</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-orders-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Orders View -->
+            <section id="view-orders" class="content-view">
+                <div class="page-header">
+                    <div>
+                        <h1>Order Management</h1>
+                        <p>View, update, and contact customers about their orders.</p>
+                    </div>
+                    <button class="btn-primary" id="export-csv-btn" onclick="exportOrdersCSV()"><i class="fas fa-file-csv"></i> Export CSV</button>
+                </div>
+
+                <div class="data-card">
+                    <div class="card-header">
+                        <h3>All Orders</h3>
+                        <select id="order-status-filter" class="chart-filter" onchange="renderOrders()">
+                            <option value="All">All Statuses</option>
+                            <option value="Pending">Pending</option>
+                            <option value="Processing">Processing</option>
+                            <option value="Shipped">Shipped</option>
+                            <option value="Delivered">Delivered</option>
+                            <option value="Cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Order ID</th>
+                                    <th>Customer</th>
+                                    <th>Product</th>
+                                    <th>Amount</th>
+                                    <th>Date</th>
+                                    <th>Status</th>
+                                    <th>Contact</th>
+                                    <th>Update</th>
+                                </tr>
+                            </thead>
+                            <tbody id="all-orders-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Products View -->
+            <section id="view-products" class="content-view">
+                <div class="page-header"><h1>Product Management</h1></div>
+                <div class="data-card">
+                    <div class="card-header">
+                        <h3 id="product-form-title">Add New Product</h3>
+                    </div>
+                    <form id="product-form" class="admin-form">
+                        <input type="hidden" id="product-edit-id" value="">
+                        <div class="form-group">
+                            <label>Product Name</label>
+                            <input type="text" id="product-name" placeholder="e.g. Classic Leather Jacket" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Price (NLE)</label>
+                            <input type="number" id="product-price" placeholder="e.g. 550" step="0.01" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Category</label>
+                            <select id="product-category">
+                                <option value="men">Men</option>
+                                <option value="women">Women</option>
+                                <option value="shoes">Shoes</option>
+                                <option value="accessories">Accessories</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Product Image</label>
+                            <input type="file" id="product-image" accept="image/*">
+                            <small id="image-hint" style="color:var(--text-muted);"></small>
+                        </div>
+                        <div style="display:flex; gap:10px;">
+                            <button type="submit" class="btn-primary" id="product-submit-btn">Publish to Store</button>
+                            <button type="button" class="btn-secondary" id="cancel-edit-btn" onclick="cancelEdit()" style="display:none;">Cancel Edit</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="data-card" style="margin-top: 30px;">
+                    <div class="card-header">
+                        <h3>Current Inventory</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Actions</th></tr>
+                            </thead>
+                            <tbody id="inventory-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Customers View -->
+            <section id="view-customers" class="content-view">
+                <div class="page-header">
+                    <div>
+                        <h1>Customers</h1>
+                        <p>Everyone who has ordered from your store.</p>
+                    </div>
+                </div>
+                <div class="data-card">
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr><th>Name</th><th>Email</th><th>Phone (WhatsApp)</th><th>Orders</th><th>Total Spent</th><th>Last Order</th><th>Contact</th></tr>
+                            </thead>
+                            <tbody id="customers-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings View -->
+            <section id="view-settings" class="content-view">
+                <div class="page-header">
+                    <div>
+                        <h1>Settings</h1>
+                        <p>Manage your admin account.</p>
+                    </div>
+                </div>
+                <div class="data-card">
+                    <div class="card-header">
+                        <h3>Change Admin Password</h3>
+                    </div>
+                    <form id="password-form" class="admin-form">
+                        <div class="form-group">
+                            <label>Current Password</label>
+                            <input type="password" id="current-password" required>
+                        </div>
+                        <div class="form-group">
+                            <label>New Password (min 6 characters)</label>
+                            <input type="password" id="new-password" minlength="6" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Confirm New Password</label>
+                            <input type="password" id="confirm-password" minlength="6" required>
+                        </div>
+                        <button type="submit" class="btn-primary">Update Password</button>
+                    </form>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+    <script src="js/admin.js"></script>
+</body>
+</html>

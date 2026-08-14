@@ -1,0 +1,20 @@
+{
+  "name": "empire-fashion-website",
+  "version": "1.0.0",
+  "description": "Empire Fashion House - E-commerce Store",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^5.2.1",
+    "express-session": "^1.18.1",
+    "json-server": "^1.0.0-beta.15"
+  }
+}

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Empire Fashion House</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    
+    <header>
+        <div class="logo">
+            <img src="assets/images/logo.jpeg" alt="Empire Fashion House Logo">
+        </div>
+        <nav id="main-nav">
+            <ul>
+                <li><a href="#" data-category="all">Home</a></li>
+                <li><a href="#" data-category="men">Men</a></li>
+                <li><a href="#" data-category="women">Women</a></li>
+                <li><a href="#" data-category="shoes">Shoes</a></li>
+                <li><a href="#" data-category="accessories">Accessories</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="cart-btn" onclick="toggleCart()">🛒 Cart (<span id="cart-count">0</span>)</div>
+            <button class="hamburger" id="hamburger-btn" onclick="toggleMobileNav()">☰</button>
+        </div>
+    </header>
+
+    <!-- Mobile Nav Dropdown -->
+    <div id="mobile-nav" class="mobile-nav">
+        <a href="#" data-category="all" class="mobile-nav-link">Home</a>
+        <a href="#" data-category="men" class="mobile-nav-link">Men</a>
+        <a href="#" data-category="women" class="mobile-nav-link">Women</a>
+        <a href="#" data-category="shoes" class="mobile-nav-link">Shoes</a>
+        <a href="#" data-category="accessories" class="mobile-nav-link">Accessories</a>
+    </div>
+
+    <section class="hero">
+        <h1>EMPIRE FASHION HOUSE</h1>
+        <p>Redefining style. Wear the crown.</p>
+        <button onclick="scrollToProducts()">Shop Now</button>
+    </section>
+
+    <div class="products-container" id="products-section">
+        <h2 id="collection-title">Featured Collection</h2>
+        <div id="product-grid" class="products"></div>
+    </div>
+
+    <!-- About Section -->
+    <section class="about-section">
+        <div class="about-content">
+            <h2>About Empire Fashion House</h2>
+            <p>Empire Fashion House is Sierra Leone's premier destination for premium streetwear and luxury fashion. We believe style is a statement — that's why every piece in our collection is handpicked to help you own your crown.</p>
+            <p>From classic sneakers to bold fits, we bring the world's best brands and our own exclusive drops straight to your doorstep in Freetown and beyond.</p>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-grid">
+            <div class="footer-col">
+                <img src="assets/images/logo.jpeg" alt="Empire Fashion House" class="footer-logo">
+                <p class="footer-tagline">Redefining style. Wear the crown.</p>
+            </div>
+            <div class="footer-col">
+                <h3>Quick Links</h3>
+                <a href="#">Home</a>
+                <a href="#" data-category="men">Men</a>
+                <a href="#" data-category="women">Women</a>
+                <a href="#" data-category="shoes">Shoes</a>
+                <a href="#" data-category="accessories">Accessories</a>
+            </div>
+            <div class="footer-col">
+                <h3>Contact Us</h3>
+                <p>📍 Freetown, Sierra Leone</p>
+                <p>📞 +232 XX XXX XXX</p>
+                <p>✉️ info@empirefashionhouse.com</p>
+            </div>
+            <div class="footer-col">
+                <h3>Follow Us</h3>
+                <div class="social-links">
+                    <a href="#" class="social-icon">📘</a>
+                    <a href="#" class="social-icon">📸</a>
+                    <a href="#" class="social-icon">🐦</a>
+                    <a href="#" class="social-icon">📺</a>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 Empire Fashion House. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Shopping Cart Sidebar -->
+    <div id="cart-sidebar" class="cart-sidebar">
+        <div class="cart-header">
+            <h3>Your Cart</h3>
+            <button onclick="toggleCart()" class="close-btn">&times;</button>
+        </div>
+        <div id="cart-items" class="cart-items"></div>
+        <div class="cart-footer">
+            <div class="cart-total">
+                <strong>Total:</strong> <span id="cart-total-price">NLE 0.00</span>
+            </div>
+            <button class="checkout-btn" onclick="showCheckoutForm()">Proceed to Checkout</button>
+        </div>
+    </div>
+
+    <!-- Checkout Modal -->
+    <div id="checkout-modal" class="checkout-modal">
+        <div class="checkout-content">
+            <button class="close-btn" onclick="hideCheckoutForm()">&times;</button>
+            <h2>Complete Your Order</h2>
+            <div id="checkout-summary"></div>
+            <form id="checkout-form">
+                <div class="form-group">
+                    <label>Full Name *</label>
+                    <input type="text" id="cust-name" required placeholder="John Doe">
+                </div>
+                <div class="form-group">
+                    <label>Email *</label>
+                    <input type="email" id="cust-email" required placeholder="john@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Phone (WhatsApp) *</label>
+                    <input type="tel" id="cust-phone" required placeholder="+232 XX XXX XXX">
+                </div>
+                <div class="form-group">
+                    <label>Delivery Address *</label>
+                    <input type="text" id="cust-address" required placeholder="House no, Street, Area">
+                </div>
+                <button type="submit" class="checkout-btn" style="width:100%; margin-top:10px;">Place Order</button>
+            </form>
+        </div>
+    </div>
+    <div id="checkout-overlay" class="cart-overlay" onclick="hideCheckoutForm()"></div>
+
+    <div id="cart-overlay" class="cart-overlay" onclick="toggleCart()"></div>
+
+    <script src="js/script.js"></script>
+</body>
+</html>
