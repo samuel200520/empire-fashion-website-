@@ -136,7 +136,7 @@ app.patch('/api/orders/:id', requireAdmin, (req, res) => {
     const db = readDb();
     const order = db.orders.find(o => o.id === Number(req.params.id));
     if (!order) return res.status(404).json({ error: 'Order not found' });
-    const allowed = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
+    const allowed = ['Pending', 'Paid', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
     if (!allowed.includes(req.body.status)) {
         return res.status(400).json({ error: 'Invalid status' });
     }
@@ -186,6 +186,211 @@ app.delete('/api/products/:id', requireAdmin, (req, res) => {
 // Redirect old json-server URLs
 app.use(['/products', '/orders', '/customers'], (req, res) => {
     res.redirect(308, req.originalUrl.replace(/^\/(products|orders|customers)/, m => '/api' + m));
+});
+
+// ---- Monime Payment Gateway ----
+const MONIME_TOKEN = process.env.MONIME_TOKEN || '';
+const MONIME_SPACE = process.env.MONIME_SPACE || '';
+const MONIME_API = 'https://api.monime.io';
+
+function monimeHeaders(idempotencyKey) {
+    return {
+        'Authorization': `Bearer ${MONIME_TOKEN}`,
+        'Content-Type': 'application/json',
+        'Monime-Version': 'caph.2025-08-23',
+        'Monime-Space-Id': MONIME_SPACE,
+        'Idempotency-Key': idempotencyKey
+    };
+}
+
+// Create a Monime checkout session for an order, then return the redirect URL
+app.post('/api/checkout/monime', async (req, res) => {
+    if (!MONIME_TOKEN || !MONIME_SPACE) {
+        return res.status(500).json({ error: 'Monime not configured. Set MONIME_TOKEN and MONIME_SPACE environment variables.' });
+    }
+
+    const { customer, email, phone, address, items, amount } = req.body || {};
+    if (!customer || !Array.isArray(items) || items.length === 0 || !amount) {
+        return res.status(400).json({ error: 'Missing order details' });
+    }
+
+    const origin = req.get('origin') || req.protocol + '://' + req.get('host');
+    const idempotencyKey = `emp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    try {
+        // 1. Create the order locally first (status: Pending)
+        const db = readDb();
+        const orderId = nextId(db.orders);
+        const order = {
+            id: orderId,
+            customer: String(customer).slice(0, 100),
+            email: String(email || '').slice(0, 100),
+            phone: String(phone || '').slice(0, 30),
+            address: String(address || '').slice(0, 200),
+            product: items.map(i => i.name).join(', '),
+            amount: Number(amount),
+            paymentMethod: 'monime',
+            paymentRef: '',
+            monimeSessionId: '',
+            date: new Date().toISOString().split('T')[0],
+            status: 'Pending'
+        };
+        db.orders.push(order);
+
+        let cust = db.customers.find(c => c.name === order.customer);
+        if (cust) {
+            cust.spent = (parseFloat(cust.spent) || 0) + order.amount;
+        } else {
+            db.customers.push({
+                id: nextId(db.customers),
+                name: order.customer,
+                email: order.email || 'unknown@example.com',
+                spent: order.amount
+            });
+        }
+        writeDb(db);
+
+        // 2. Call Monime to create a hosted checkout session
+        // Amounts are in the currency's minor unit: SLE 1 = 100 (cents)
+        const amountInCents = Math.round(Number(amount) * 100);
+
+        const sessionBody = {
+            name: `Empire Fashion House - Order #EMP${orderId}`,
+            description: items.map(i => i.name).join(', '),
+            successUrl: `${origin}/checkout-success.html?order_id=${orderId}`,
+            cancelUrl: `${origin}/checkout-cancel.html?order_id=${orderId}`,
+            reference: `EMP${orderId}`,
+            callbackState: `${orderId}`,
+            lineItems: items.map(i => ({
+                type: 'custom',
+                name: i.name,
+                price: {
+                    currency: 'SLE',
+                    value: Math.round(Number(i.price) * 100)
+                },
+                quantity: 1
+            })),
+            paymentOptions: {
+                momo: { disable: false },
+                card: { disable: false },
+                bank: { disable: false },
+                wallet: { disable: false }
+            },
+            brandingOptions: {
+                primaryColor: '#D4AF37'
+            }
+        };
+
+        const monimeRes = await fetch(`${MONIME_API}/v1/checkout-sessions`, {
+            method: 'POST',
+            headers: monimeHeaders(idempotencyKey),
+            body: JSON.stringify(sessionBody)
+        });
+
+        if (!monimeRes.ok) {
+            const errBody = await monimeRes.text();
+            console.error('Monime error:', monimeRes.status, errBody);
+            return res.status(502).json({ error: 'Failed to create Monime checkout session. Try Cash on Delivery instead.' });
+        }
+
+        const sessionData = await monimeRes.json();
+        const redirectUrl = sessionData?.result?.redirectUrl;
+
+        if (!redirectUrl) {
+            console.error('Monime response missing redirectUrl:', JSON.stringify(sessionData).slice(0, 500));
+            return res.status(502).json({ error: 'Monime returned an unexpected response. Try again or use Cash on Delivery.' });
+        }
+
+        // Save the Monime session ID on our order
+        const db2 = readDb();
+        const savedOrder = db2.orders.find(o => o.id === orderId);
+        if (savedOrder) {
+            savedOrder.monimeSessionId = sessionData.result.id || '';
+            writeDb(db2);
+        }
+
+        // 3. Return the redirect URL so the frontend can send the customer there
+        res.json({ redirectUrl, orderId });
+
+    } catch (error) {
+        console.error('Monime checkout error:', error);
+        res.status(500).json({ error: 'Something went wrong. Try Cash on Delivery instead.' });
+    }
+});
+
+// Monime webhook: payment confirmed -> mark order as Paid
+app.post('/api/monime/webhook', async (req, res) => {
+    console.log('Monime webhook received:', JSON.stringify(req.body).slice(0, 500));
+
+    try {
+        const eventName = req.body?.event?.name;
+        const sessionId = req.body?.object?.id;
+        const status = req.body?.data?.status;
+        const orderNumber = req.body?.data?.orderNumber;
+        const callbackState = req.body?.data?.callbackState;
+
+        // Only process checkout_session.completed events
+        if (eventName === 'checkout_session.completed' && status === 'completed') {
+            const db = readDb();
+            // Find order by callbackState (our order ID) or by monimeSessionId
+            let order = null;
+            if (callbackState) {
+                order = db.orders.find(o => o.id === Number(callbackState));
+            }
+            if (!order && sessionId) {
+                order = db.orders.find(o => o.monimeSessionId === sessionId);
+            }
+            if (!order && orderNumber) {
+                order = db.orders.find(o => `EMP${o.id}` === orderNumber);
+            }
+
+            if (order && order.status === 'Pending') {
+                order.status = 'Paid';
+                if (sessionId) order.monimeSessionId = sessionId;
+                if (orderNumber) order.paymentRef = orderNumber;
+                writeDb(db);
+                console.log(`Order #EMP${order.id} marked as Paid via Monime`);
+            }
+        }
+
+        res.json({ received: true });
+    } catch (error) {
+        console.error('Webhook processing error:', error);
+        res.status(500).json({ error: 'Webhook processing failed' });
+    }
+});
+
+// Simple success/cancel pages for Monime redirects
+app.get('/checkout-success.html', (req, res) => {
+    const orderId = req.query.order_id || '';
+    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Payment Successful - Empire Fashion House</title>
+<style>body{font-family:Helvetica,Arial,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f9f9f9;color:#111;}
+.box{text-align:center;background:#fff;padding:50px;border-radius:10px;box-shadow:0 5px 20px rgba(0,0,0,.1);max-width:400px;width:90%;}
+.box .check{font-size:70px;margin-bottom:15px;}
+.box h1{color:#D4AF37;font-size:28px;margin-bottom:10px;}
+.box p{color:#777;line-height:1.6;margin-bottom:25px;}
+.box a{display:inline-block;padding:14px 35px;background:#D4AF37;color:#111;border-radius:5px;font-weight:bold;text-decoration:none;transition:.3s;}
+.box a:hover{background:#b8941f;}
+</style></head><body><div class="box"><div class="check">✅</div><h1>Payment Successful!</h1>
+<p>Your payment has been confirmed. Order #EMP${esc(orderId)} is being processed. We will contact you on WhatsApp shortly.</p>
+<a href="/">Continue Shopping</a></div></body></html>`);
+});
+
+app.get('/checkout-cancel.html', (req, res) => {
+    const orderId = req.query.order_id || '';
+    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Payment Cancelled - Empire Fashion House</title>
+<style>body{font-family:Helvetica,Arial,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f9f9f9;color:#111;}
+.box{text-align:center;background:#fff;padding:50px;border-radius:10px;box-shadow:0 5px 20px rgba(0,0,0,.1);max-width:400px;width:90%;}
+.box .icon{font-size:70px;margin-bottom:15px;}
+.box h1{color:#111;font-size:28px;margin-bottom:10px;}
+.box p{color:#777;line-height:1.6;margin-bottom:25px;}
+.box a{display:inline-block;padding:14px 35px;background:#111;color:#fff;border-radius:5px;font-weight:bold;text-decoration:none;transition:.3s;margin:5px;}
+.box a:hover{background:#D4AF37;}
+</style></head><body><div class="box"><div class="icon">💳</div><h1>Payment Cancelled</h1>
+<p>Your payment was not completed. Order #EMP${esc(orderId)} remains pending. You can try again or pay with Cash on Delivery.</p>
+<a href="/">Continue Shopping</a><a href="/">Try Again</a></div></body></html>`);
 });
 
 app.listen(PORT, () => {

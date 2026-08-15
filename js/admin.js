@@ -201,7 +201,7 @@ function renderOrders() {
         return;
     }
 
-    const PAYMENT_LABELS = { cod: '💵 COD', orange: '🟠 Orange Money', afrimoney: '🔴 Afrimoney' };
+    const PAYMENT_LABELS = { cod: '💵 COD', orange: '🟠 Orange Money', afrimoney: '🔴 Afrimoney', monime: '💳 Monime' };
 
     tbody.innerHTML = filtered.map(o => {
         const link = waLink(o.phone, `Hello ${o.customer}, this is Empire Fashion House regarding your order #EMP${o.id} (${o.product}) for NLE ${o.amount}.`);
@@ -222,7 +222,7 @@ function renderOrders() {
                 <td>${contactBtn}</td>
                 <td>
                     <select onchange="updateOrderStatus(${o.id}, this.value)" class="chart-filter" style="padding: 5px;">
-                        ${['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'].map(s =>
+                        ${['Pending', 'Paid', 'Processing', 'Shipped', 'Delivered', 'Cancelled'].map(s =>
                             `<option value="${s}" ${o.status === s ? 'selected' : ''}>${s}</option>`
                         ).join('')}
                     </select>
@@ -259,7 +259,7 @@ function exportOrdersCSV() {
         return;
     }
     const headers = ['ID', 'Customer', 'Email', 'Phone', 'Address', 'Product', 'Amount', 'Payment Method', 'Payment Ref', 'Date', 'Status'];
-    const PAYMENT_LABELS = { cod: 'Cash on Delivery', orange: 'Orange Money', afrimoney: 'Afrimoney' };
+    const PAYMENT_LABELS = { cod: 'Cash on Delivery', orange: 'Orange Money', afrimoney: 'Afrimoney', monime: 'Monime (Card/MoMo/Bank)' };
     const rows = allOrders.map(o => [
         `EMP${o.id}`, o.customer, o.email || '', o.phone || '', o.address || '',
         o.product, o.amount, PAYMENT_LABELS[o.paymentMethod] || o.paymentMethod || '', o.paymentRef || '', o.date, o.status

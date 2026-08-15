@@ -274,6 +274,32 @@ document.addEventListener('DOMContentLoaded', () => {
         const amount = cart.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
 
         try {
+            // --- Monime: redirect to Monime's hosted checkout page ---
+            if (paymentMethod === 'monime') {
+                const res = await fetch(`${API_URL}/api/checkout/monime`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        customer,
+                        email,
+                        phone,
+                        address,
+                        items: cart.map(i => ({ name: i.name, price: i.price })),
+                        amount
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.redirectUrl) {
+                    throw new Error(data.error || 'Failed to create Monime checkout');
+                }
+                // Order is saved, redirect to Monime's payment page
+                cart = [];
+                updateCartUI();
+                window.location.href = data.redirectUrl;
+                return;
+            }
+
+            // --- COD / manual mobile money: place order directly ---
             const res = await fetch(`${API_URL}/api/orders`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
