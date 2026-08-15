@@ -520,3 +520,31 @@ body.dark-mode .cat-badge { color: var(--primary-gold); }
     transition: 0.3s;
 }
 .whatsapp-order-btn:hover { background-color: #1ebe57; }
+
+/* Payment method selection (checkout modal) */
+.payment-options { display: flex; flex-direction: column; gap: 8px; }
+.payment-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 15px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.2s;
+    font-weight: 500;
+    color: #111;
+}
+.payment-option:hover { border-color: #D4AF37; }
+.payment-option:has(input:checked) { border-color: #D4AF37; background: rgba(212, 175, 55, 0.08); }
+.payment-option input { accent-color: #b8941f; width: 18px; height: 18px; }
+
+.momo-instructions {
+    background: rgba(212, 175, 55, 0.1);
+    border: 1px solid #D4AF37;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 15px;
+    line-height: 1.6;
+    color: #111;
+}

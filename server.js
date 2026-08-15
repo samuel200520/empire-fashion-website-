@@ -88,9 +88,14 @@ function requireAdmin(req, res, next) {
 app.get('/api/products', (req, res) => res.json(readDb().products));
 
 app.post('/api/orders', (req, res) => {
-    const { customer, email, phone, address, items, amount } = req.body || {};
+    const { customer, email, phone, address, items, amount, paymentMethod, paymentRef } = req.body || {};
     if (!customer || !Array.isArray(items) || items.length === 0 || !amount) {
         return res.status(400).json({ error: 'Missing order details' });
+    }
+    const PAYMENT_METHODS = ['cod', 'orange', 'afrimoney'];
+    const method = PAYMENT_METHODS.includes(paymentMethod) ? paymentMethod : 'cod';
+    if ((method === 'orange' || method === 'afrimoney') && !paymentRef) {
+        return res.status(400).json({ error: 'Transaction reference required for mobile money orders' });
     }
     const db = readDb();
     const order = {
@@ -101,6 +106,8 @@ app.post('/api/orders', (req, res) => {
         address: String(address || '').slice(0, 200),
         product: items.map(i => i.name).join(', '),
         amount: Number(amount),
+        paymentMethod: method,
+        paymentRef: paymentRef ? String(paymentRef).slice(0, 50) : '',
         date: new Date().toISOString().split('T')[0],
         status: 'Pending'
     };

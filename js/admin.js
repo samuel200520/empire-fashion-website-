@@ -193,25 +193,30 @@ function renderOrders() {
 
     const filtered = allOrders.filter(o =>
         (statusFilter === 'All' || o.status === statusFilter) &&
-        matchesSearch(o.id, o.customer, o.product, o.status, o.email, o.phone)
+        matchesSearch(o.id, o.customer, o.product, o.status, o.email, o.phone, o.paymentMethod, o.paymentRef)
     );
 
     if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted);">No orders found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted);">No orders found.</td></tr>`;
         return;
     }
+
+    const PAYMENT_LABELS = { cod: '💵 COD', orange: '🟠 Orange Money', afrimoney: '🔴 Afrimoney' };
 
     tbody.innerHTML = filtered.map(o => {
         const link = waLink(o.phone, `Hello ${o.customer}, this is Empire Fashion House regarding your order #EMP${o.id} (${o.product}) for NLE ${o.amount}.`);
         const contactBtn = link
             ? `<a href="${link}" target="_blank" class="whatsapp-btn" title="Message on WhatsApp"><i class="fab fa-whatsapp"></i></a>`
             : `<span style="color:var(--text-muted)">--</span>`;
+        const payment = PAYMENT_LABELS[o.paymentMethod] || esc(o.paymentMethod || '--');
+        const ref = o.paymentRef ? `<br><small style="color:var(--text-muted)">Ref: ${esc(o.paymentRef)}</small>` : '';
         return `
             <tr>
                 <td><strong>#EMP${o.id}</strong></td>
                 <td>${esc(o.customer)}<br><small style="color:var(--text-muted)">${esc(o.address || '')}</small></td>
                 <td>${esc(o.product)}</td>
                 <td>NLE ${(parseFloat(o.amount) || 0).toLocaleString()}</td>
+                <td>${payment}${ref}</td>
                 <td>${o.date ? new Date(o.date).toLocaleDateString() : '--'}</td>
                 <td><span class="status-badge status-${String(o.status).toLowerCase()}">${esc(o.status)}</span></td>
                 <td>${contactBtn}</td>
@@ -253,10 +258,11 @@ function exportOrdersCSV() {
         showToast("No orders to export.");
         return;
     }
-    const headers = ['ID', 'Customer', 'Email', 'Phone', 'Address', 'Product', 'Amount', 'Date', 'Status'];
+    const headers = ['ID', 'Customer', 'Email', 'Phone', 'Address', 'Product', 'Amount', 'Payment Method', 'Payment Ref', 'Date', 'Status'];
+    const PAYMENT_LABELS = { cod: 'Cash on Delivery', orange: 'Orange Money', afrimoney: 'Afrimoney' };
     const rows = allOrders.map(o => [
         `EMP${o.id}`, o.customer, o.email || '', o.phone || '', o.address || '',
-        o.product, o.amount, o.date, o.status
+        o.product, o.amount, PAYMENT_LABELS[o.paymentMethod] || o.paymentMethod || '', o.paymentRef || '', o.date, o.status
     ]);
     const csv = '\ufeff' + [headers, ...rows]
         .map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))

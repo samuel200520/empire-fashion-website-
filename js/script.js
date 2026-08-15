@@ -4,6 +4,13 @@ const API_URL = "";
 // Replace with your real number, e.g. "23276123456"
 const STORE_WHATSAPP = "23233600560";
 
+// Mobile money accounts customers send payment to.
+// Update the numbers/names here when they change.
+const MOMO_ACCOUNTS = {
+    orange: { label: "Orange Money", number: "+232 77 977642", name: "Empire Fashion House" },
+    afrimoney: { label: "Afrimoney", number: "+232 33 XXX XXX", name: "Empire Fashion House" }
+};
+
 let cart = [];
 let storeProducts = [];
 
@@ -224,6 +231,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // 6. Place order
 document.addEventListener('DOMContentLoaded', () => {
+    // Payment method switching: show momo instructions when Orange/Afrimoney is picked
+    document.querySelectorAll('input[name="payment-method"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const momoBox = document.getElementById('momo-box');
+            const refInput = document.getElementById('payment-ref');
+            const account = MOMO_ACCOUNTS[this.value];
+            if (account) {
+                const total = cart.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
+                document.getElementById('momo-text').innerHTML =
+                    `Send <strong>NLE ${total.toFixed(2)}</strong> to <strong>${esc(account.label)}</strong>:<br>` +
+                    `<strong style="font-size:18px;">${esc(account.number)}</strong> (${esc(account.name)})<br>` +
+                    `Then enter the transaction reference below so we can confirm your payment.`;
+                momoBox.style.display = 'block';
+                refInput.required = true;
+            } else {
+                momoBox.style.display = 'none';
+                refInput.required = false;
+            }
+        });
+    });
+
     document.getElementById('checkout-form').addEventListener('submit', async function(e) {
         e.preventDefault();
 
@@ -231,9 +259,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const email = document.getElementById('cust-email').value.trim();
         const phone = document.getElementById('cust-phone').value.trim();
         const address = document.getElementById('cust-address').value.trim();
+        const paymentMethod = document.querySelector('input[name="payment-method"]:checked').value;
+        const paymentRef = document.getElementById('payment-ref').value.trim();
 
         if (!customer || !email || !phone || !address) {
             alert("Please fill in all fields.");
+            return;
+        }
+        if (MOMO_ACCOUNTS[paymentMethod] && !paymentRef) {
+            alert("Please enter your mobile money transaction reference ID.");
             return;
         }
 
@@ -249,7 +283,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     phone,
                     address,
                     items: cart.map(i => ({ name: i.name, price: i.price })),
-                    amount
+                    amount,
+                    paymentMethod,
+                    paymentRef: paymentRef || undefined
                 })
             });
             if (!res.ok) throw new Error('Server rejected the order');
@@ -264,6 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cart = [];
             updateCartUI();
             document.getElementById('checkout-form').reset();
+            document.getElementById('momo-box').style.display = 'none';
         } catch (error) {
             console.error("Checkout failed:", error);
             alert("There was an error processing your order. Please try again.");
