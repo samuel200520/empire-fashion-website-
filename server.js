@@ -193,6 +193,11 @@ const MONIME_TOKEN = process.env.MONIME_TOKEN || '';
 const MONIME_SPACE = process.env.MONIME_SPACE || '';
 const MONIME_API = 'https://api.monime.io';
 
+// HTML escape helper for server-rendered pages
+function esc(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function monimeHeaders(idempotencyKey) {
     return {
         'Authorization': `Bearer ${MONIME_TOKEN}`,

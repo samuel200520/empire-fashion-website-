@@ -144,27 +144,11 @@
                             <input type="radio" name="payment-method" value="cod" checked>
                             <span>💵 Cash on Delivery</span>
                         </label>
-                        <label class="payment-option">
-                            <input type="radio" name="payment-method" value="orange">
-                            <span>🟠 Orange Money</span>
-                        </label>
-                        <label class="payment-option">
-                            <input type="radio" name="payment-method" value="afrimoney">
-                            <span>🔴 Afrimoney</span>
-                        </label>
                         <label class="payment-option pay-monime">
                             <input type="radio" name="payment-method" value="monime">
-                            <span>💳 Pay with Monime <small>(Card / Mobile Money / Bank)</small></span>
+                            <span>💳 Pay with Monime <small>(Card / Mobile Money / Bank Transfer)</small></span>
                         </label>
                     </div>
-                </div>
-                <div class="form-group" id="momo-box" style="display:none;">
-                    <div class="momo-instructions">
-                        <p id="momo-text"></p>
-                    </div>
-                    <label>Transaction Reference ID *</label>
-                    <input type="text" id="payment-ref" placeholder="e.g. MP240814.1234.A56789">
-                    <small style="color:#777;">Find it in the confirmation SMS you received after sending the money.</small>
                 </div>
                 <button type="submit" class="checkout-btn" style="width:100%; margin-top:10px;">Place Order</button>
                 <button type="button" class="whatsapp-order-btn" onclick="orderViaWhatsApp()">
