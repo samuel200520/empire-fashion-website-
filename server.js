@@ -23,9 +23,11 @@ if (!DATABASE_URL) {
     process.exit(1);
 }
 
+// Local PostgreSQL has no SSL; Render's requires it
+const needsSsl = !/localhost|127\.0\.0\.1/.test(DATABASE_URL);
 const pool = new Pool({
     connectionString: DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
+    ssl: needsSsl ? { rejectUnauthorized: false } : undefined
 });
 pool.on('error', err => console.error('Unexpected Postgres pool error:', err.message));
 
