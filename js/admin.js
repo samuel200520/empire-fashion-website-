@@ -138,10 +138,16 @@ function updateBadges() {
     if (notifBadge) notifBadge.textContent = pending > 0 ? pending : '';
 }
 
+// Order product names — prefer the items array; variant commas would break naive splitting
+function orderItems(o) {
+    if (Array.isArray(o.items) && o.items.length > 0) return o.items.map(i => i.name);
+    return String(o.product || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
 // ---- 6. Dashboard ----
 function renderDashboard() {
     const revenue = allOrders.reduce((sum, o) => sum + (parseFloat(o.amount) || 0), 0);
-    const totalItems = allOrders.reduce((sum, o) => o.product ? sum + o.product.split(',').length : sum, 0);
+    const totalItems = allOrders.reduce((sum, o) => sum + orderItems(o).length, 0);
 
     // This month vs last month for real trends
     const now = new Date();
@@ -152,8 +158,8 @@ function renderDashboard() {
     const revLast = allOrders.filter(o => (o.date || '').startsWith(lastKey)).reduce((s, o) => s + (parseFloat(o.amount) || 0), 0);
     const ordThis = allOrders.filter(o => (o.date || '').startsWith(thisKey)).length;
     const ordLast = allOrders.filter(o => (o.date || '').startsWith(lastKey)).length;
-    const itemsThis = allOrders.filter(o => (o.date || '').startsWith(thisKey)).reduce((s, o) => s + (o.product ? o.product.split(',').length : 0), 0);
-    const itemsLast = allOrders.filter(o => (o.date || '').startsWith(lastKey)).reduce((s, o) => s + (o.product ? o.product.split(',').length : 0), 0);
+    const itemsThis = allOrders.filter(o => (o.date || '').startsWith(thisKey)).reduce((s, o) => s + orderItems(o).length, 0);
+    const itemsLast = allOrders.filter(o => (o.date || '').startsWith(lastKey)).reduce((s, o) => s + orderItems(o).length, 0);
 
     const custsThisMonth = new Set(allOrders.filter(o => (o.date || '').startsWith(thisKey)).map(o => o.customer)).size;
     const custsLastMonth = new Set(allOrders.filter(o => (o.date || '').startsWith(lastKey)).map(o => o.customer)).size;
@@ -315,8 +321,8 @@ async function initCharts() {
     // Category doughnut - real data from orders
     const catTotals = {};
     allOrders.forEach(o => {
-        if (!o.product) return;
-        const parts = o.product.split(',');
+        const parts = orderItems(o);
+        if (parts.length === 0) return;
         parts.forEach(p => {
             const cat = guessCategory(p.trim());
             catTotals[cat] = (catTotals[cat] || 0) + (parseFloat(o.amount) || 0) / parts.length;
@@ -364,11 +370,12 @@ function renderInventory() {
     tableBody.innerHTML = '';
 
     if (filtered.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No products found.</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted);">No products found.</td></tr>`;
         return;
     }
     filtered.forEach(product => {
         const sizes = product.sizes || [];
+        const colors = product.colors || [];
         const stockCell = product.stock === null || product.stock === undefined
             ? '<span title="Unlimited">∞</span>'
             : `<span class="${product.stock === 0 ? 'stock-out' : product.stock <= 3 ? 'stock-low' : ''}">${product.stock}</span>`;
@@ -379,6 +386,7 @@ function renderInventory() {
                 <td><span class="cat-badge">${esc(product.category || 'uncategorized')}</span></td>
                 <td>NLE ${(parseFloat(product.price) || 0).toLocaleString()}</td>
                 <td>${sizes.length > 0 ? sizes.map(s => `<span class="cat-badge">${esc(s)}</span>`).join(' ') : '--'}</td>
+                <td>${colors.length > 0 ? colors.map(c => `<span class="cat-badge">${esc(c)}</span>`).join(' ') : '--'}</td>
                 <td>${stockCell}</td>
                 <td>
                     <button onclick="startEditProduct(${product.id})" class="icon-btn" title="Edit"><i class="fas fa-pen"></i></button>
@@ -399,6 +407,7 @@ function startEditProduct(id) {
     document.getElementById('product-price').value = product.price;
     document.getElementById('product-category').value = product.category || 'men';
     document.getElementById('product-sizes').value = (product.sizes || []).join(', ');
+    document.getElementById('product-colors').value = (product.colors || []).join(', ');
     document.getElementById('product-stock').value = product.stock ?? '';
     document.getElementById('image-hint').innerText = 'Leave empty to keep the current image.';
     document.getElementById('product-submit-btn').innerText = 'Update Product';
@@ -419,9 +428,10 @@ function cancelEdit() {
 async function submitProduct(name, price, category, image) {
     const editId = document.getElementById('product-edit-id').value;
     const sizes = document.getElementById('product-sizes').value;
+    const colors = document.getElementById('product-colors').value;
     const stock = document.getElementById('product-stock').value;
     if (editId) {
-        const body = { name, price, category, sizes, stock };
+        const body = { name, price, category, sizes, colors, stock };
         if (image) body.image = image;
         const res = await fetch(`${API_URL}/api/products/${editId}`, {
             method: 'PATCH',
@@ -438,7 +448,7 @@ async function submitProduct(name, price, category, image) {
         const res = await fetch(`${API_URL}/api/products`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, price, category, image, sizes, stock })
+            body: JSON.stringify({ name, price, category, image, sizes, colors, stock })
         });
         if (!res.ok) throw new Error(await serverError(res));
         showToast('Product saved to database!');

@@ -13,7 +13,7 @@ function saveCart() {
 function loadCart() {
     try {
         cart = (JSON.parse(localStorage.getItem('empire_cart') || '[]') || [])
-            .map(i => ({ id: i.id, name: i.name, price: i.price, image: i.image, size: i.size || '' }));
+            .map(i => ({ id: i.id, name: i.name, price: i.price, image: i.image, size: i.size || '', color: i.color || '' }));
     } catch (e) {
         cart = [];
     }
@@ -26,10 +26,29 @@ function esc(str) {
     return d.innerHTML;
 }
 
+// Known color names get a matching swatch dot; unknown names still show as text
+const COLOR_HEX = {
+    'black': '#111111', 'white': '#ffffff', 'red': '#dc3545', 'blue': '#0275d8',
+    'navy': '#001f3f', 'navy blue': '#001f3f', 'royal blue': '#4169e1', 'sky blue': '#87ceeb',
+    'green': '#28a745', 'yellow': '#ffc107', 'gold': '#D4AF37', 'orange': '#fd7e14',
+    'pink': '#ff85a2', 'purple': '#6f42c1', 'brown': '#8b5a2b', 'grey': '#9a9a9a',
+    'gray': '#9a9a9a', 'cream': '#f5f0dc', 'beige': '#e8dcc4', 'wine': '#722f37',
+    'maroon': '#800000', 'olive': '#6b8e23', 'tan': '#d2b48c', 'silver': '#c0c0c0',
+    'khaki': '#c3b091', 'turquoise': '#40e0d0', 'multicolor': 'linear-gradient(90deg,#dc3545,#ffc107,#0275d8,#28a745)'
+};
+function colorDot(name) {
+    const hex = COLOR_HEX[String(name || '').toLowerCase().trim()];
+    return hex ? `<span class="color-dot" style="background:${hex};"></span>` : '';
+}
+
 // 1. Load Storefront Products
 function productCardHTML(product) {
     const index = storeProducts.indexOf(product);
     const soldOut = product.stock !== null && product.stock <= 0;
+    const colors = product.colors || [];
+    const colorDots = colors.length > 0
+        ? `<div class="card-colors">${colors.slice(0, 5).map(c => colorDot(c)).join('')}${colors.length > 5 ? `<span class="more-colors">+${colors.length - 5}</span>` : ''}</div>`
+        : '';
     return `
         <div class="product-card">
             <div class="product-image" onclick="openProduct(${product.id})">
@@ -38,6 +57,7 @@ function productCardHTML(product) {
             </div>
             <h3 class="product-title" onclick="openProduct(${product.id})">${esc(product.name)}</h3>
             <p class="price">NLE ${esc(product.price)}</p>
+            ${colorDots}
             <button class="add-to-cart" onclick="quickAdd(${index})" ${soldOut ? 'disabled' : ''}>
                 ${soldOut ? 'Sold Out' : 'Add to Cart'}
             </button>
@@ -79,21 +99,21 @@ function countInCart(productId) {
     return cart.filter(i => i.id === productId).length;
 }
 
-function addProductToCart(product, size) {
+function addProductToCart(product, size, color) {
     if (product.stock !== null && product.stock !== undefined && countInCart(product.id) >= product.stock) {
         alert(`Sorry, only ${product.stock} left in stock for this item.`);
         return false;
     }
-    cart.push({ id: product.id, name: product.name, price: product.price, image: product.image, size: size || '' });
+    cart.push({ id: product.id, name: product.name, price: product.price, image: product.image, size: size || '', color: color || '' });
     updateCartUI();
     return true;
 }
 
-// "Add to Cart" on the grid card: items with sizes open the detail page first
+// "Add to Cart" on the grid card: items with sizes or colors open the detail page first
 function quickAdd(index) {
     const p = storeProducts[index];
     if (!p) return;
-    if ((p.sizes || []).length > 0) {
+    if ((p.sizes || []).length > 0 || (p.colors || []).length > 0) {
         openProduct(p.id);
         return;
     }
@@ -101,7 +121,7 @@ function quickAdd(index) {
         alert('Sorry, this item is sold out.');
         return;
     }
-    if (addProductToCart(p, '')) toggleCart();
+    if (addProductToCart(p, '', '')) toggleCart();
 }
 
 function removeFromCart(cartIndex) {
@@ -124,7 +144,7 @@ function updateCartUI() {
                 <div class="cart-item">
                     <img src="${esc(item.image)}" alt="${esc(item.name)}">
                     <div class="cart-item-details">
-                        <h4>${esc(item.name)}${item.size ? `<span class="cart-size">${esc(item.size)}</span>` : ''}</h4>
+                        <h4>${esc(item.name)}${item.size ? `<span class="cart-size">${esc(item.size)}</span>` : ''}${item.color ? `<span class="cart-color">${colorDot(item.color)}${esc(item.color)}</span>` : ''}</h4>
                         <p>NLE ${esc(item.price)}</p>
                         <button class="remove-btn" onclick="removeFromCart(${index})">Remove</button>
                     </div>
@@ -186,7 +206,8 @@ function orderViaWhatsApp() {
 
     let msg = `Hello Empire Fashion House! I want to place an order:\n\n`;
     cart.forEach(item => {
-        msg += `• ${item.name}${item.size ? ` (Size ${item.size})` : ''} - NLE ${item.price}\n`;
+        const variants = [item.size ? `Size ${item.size}` : '', item.color ? `Color: ${item.color}` : ''].filter(Boolean).join(', ');
+        msg += `• ${item.name}${variants ? ` (${variants})` : ''} - NLE ${item.price}\n`;
     });
     msg += `\nTotal: NLE ${total.toFixed(2)}`;
     if (name) msg += `\n\nName: ${name}`;
@@ -241,6 +262,7 @@ function filterByCategory(category) {
 // 7. Product Detail Modal (shareable link: #product=ID)
 let pdProduct = null;
 let pdSelectedSize = '';
+let pdSelectedColor = '';
 
 window.addEventListener('hashchange', () => {
     const m = location.hash.match(/^#product=(\d+)/);
@@ -257,6 +279,7 @@ function renderProduct(id) {
     if (!p) { hideProductModal(); return; }
     pdProduct = p;
     pdSelectedSize = '';
+    pdSelectedColor = '';
 
     document.getElementById('pd-image').src = p.image;
     document.getElementById('pd-image').alt = p.name;
@@ -277,6 +300,21 @@ function renderProduct(id) {
     } else {
         wrap.style.display = 'none';
         box.innerHTML = '';
+    }
+
+    // Color picker
+    const cWrap = document.getElementById('pd-colors-wrap');
+    const cBox = document.getElementById('pd-colors');
+    const colors = p.colors || [];
+    if (colors.length > 0) {
+        cWrap.style.display = 'block';
+        cBox.innerHTML = colors.map(c => {
+            const safe = String(c).replace(/'/g, "\\'");
+            return `<button type="button" class="color-btn" onclick="selectColor(this, '${safe}')">${colorDot(c)}<span>${esc(c)}</span></button>`;
+        }).join('');
+    } else {
+        cWrap.style.display = 'none';
+        cBox.innerHTML = '';
     }
 
     // Stock line + Add button state
@@ -317,6 +355,12 @@ function selectSize(btn, size) {
     pdSelectedSize = size;
 }
 
+function selectColor(btn, color) {
+    document.querySelectorAll('#pd-colors .color-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    pdSelectedColor = color;
+}
+
 function hideProductModal() {
     document.getElementById('product-modal').style.display = 'none';
     document.getElementById('pd-overlay').style.display = 'none';
@@ -334,7 +378,11 @@ function pdAddToCart() {
         alert('Please select a size first.');
         return;
     }
-    if (addProductToCart(pdProduct, pdSelectedSize)) {
+    if ((pdProduct.colors || []).length > 0 && !pdSelectedColor) {
+        alert('Please select a color first.');
+        return;
+    }
+    if (addProductToCart(pdProduct, pdSelectedSize, pdSelectedColor)) {
         closeProduct();
         toggleCart();
     }
@@ -342,8 +390,9 @@ function pdAddToCart() {
 
 function askViaWhatsApp() {
     if (!pdProduct) return;
-    const sizeNote = pdSelectedSize ? ` (size ${pdSelectedSize})` : '';
-    const msg = `Hello Empire Fashion House! I'm interested in the ${pdProduct.name}${sizeNote} (NLE ${pdProduct.price}). Is it available?`;
+    const chosen = [pdSelectedSize ? `size ${pdSelectedSize}` : '', pdSelectedColor ? `color ${pdSelectedColor}` : ''].filter(Boolean).join(', ');
+    const note = chosen ? ` (${chosen})` : '';
+    const msg = `Hello Empire Fashion House! I'm interested in the ${pdProduct.name}${note} (NLE ${pdProduct.price}). Is it available?`;
     window.open(`https://wa.me/${STORE_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
@@ -386,7 +435,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         email,
                         phone,
                         address,
-                        items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, size: i.size || '' })),
+                        items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, size: i.size || '', color: i.color || '' })),
                         amount
                     })
                 });
@@ -410,7 +459,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     email,
                     phone,
                     address,
-                    items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, size: i.size || '' })),
+                    items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, size: i.size || '', color: i.color || '' })),
                     amount,
                     paymentMethod: 'cod'
                 })

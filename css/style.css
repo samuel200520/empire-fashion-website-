@@ -602,8 +602,9 @@ body.dark-mode .cat-badge { color: var(--primary-gold); }
 .pd-info h2 { color: #111; margin-bottom: 10px; }
 .pd-price { color: #D4AF37; font-size: 28px; font-weight: bold; margin-bottom: 20px; }
 #pd-sizes-wrap { margin-bottom: 15px; }
-#pd-sizes-wrap label { display: block; font-weight: bold; color: #111; margin-bottom: 8px; }
-.size-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+#pd-sizes-wrap label, #pd-colors-wrap label { display: block; font-weight: bold; color: #111; margin-bottom: 8px; }
+#pd-colors-wrap { margin-bottom: 15px; }
+.size-buttons, .color-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
 .size-btn {
     min-width: 50px;
     padding: 10px 14px;
@@ -617,6 +618,39 @@ body.dark-mode .cat-badge { color: var(--primary-gold); }
 }
 .size-btn:hover { border-color: #D4AF37; }
 .size-btn.selected { border-color: #D4AF37; background: #D4AF37; color: #111; }
+.color-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border: 2px solid #ddd;
+    background: #fff;
+    color: #111;
+    border-radius: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.color-btn:hover { border-color: #D4AF37; }
+.color-btn.selected { border-color: #D4AF37; background: rgba(212, 175, 55, 0.12); }
+.color-dot {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid rgba(0,0,0,0.2);
+    flex-shrink: 0;
+}
+/* Color dots preview on grid cards */
+.card-colors {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: -8px 0 12px;
+}
+.card-colors .color-dot { width: 14px; height: 14px; }
+.more-colors { font-size: 11px; color: #777; }
 #pd-stock { margin-bottom: 15px; font-size: 14px; min-height: 20px; }
 #pd-add { margin-bottom: 10px; }
 #pd-add:disabled { background: #999; cursor: not-allowed; }
@@ -663,7 +697,7 @@ body.dark-mode .cat-badge { color: var(--primary-gold); }
 }
 .add-to-cart:disabled { background: #999; color: #fff; cursor: not-allowed; }
 
-/* Size chip inside cart items */
+/* Size chip + color chip inside cart items */
 .cart-size {
     display: inline-block;
     background: #111;
@@ -674,6 +708,19 @@ body.dark-mode .cat-badge { color: var(--primary-gold); }
     margin-left: 8px;
     vertical-align: middle;
 }
+.cart-color {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(212, 175, 55, 0.15);
+    color: #111;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+.cart-color .color-dot { width: 10px; height: 10px; }
 
 /* Admin stock/sizes cells */
 .stock-out { color: var(--danger); font-weight: bold; }

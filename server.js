@@ -87,6 +87,7 @@ async function initDb() {
     // stock NULL means unlimited (legacy products keep selling).
     await pool.query(`
         ALTER TABLE products ADD COLUMN IF NOT EXISTS sizes TEXT NOT NULL DEFAULT '';
+        ALTER TABLE products ADD COLUMN IF NOT EXISTS colors TEXT NOT NULL DEFAULT '';
         ALTER TABLE products ADD COLUMN IF NOT EXISTS stock INT;
         UPDATE products SET stock = NULL WHERE stock = 0 AND sizes = '';
     `);
@@ -130,11 +131,12 @@ function mapProduct(r) {
     return {
         id: r.id, name: r.name, price: Number(r.price), category: r.category, image: r.image,
         sizes: String(r.sizes || '').split(',').map(s => s.trim()).filter(Boolean),
+        colors: String(r.colors || '').split(',').map(c => c.trim()).filter(Boolean),
         stock: r.stock === null || r.stock === undefined ? null : Number(r.stock)
     };
 }
-function normSizes(sizes) {
-    const arr = Array.isArray(sizes) ? sizes : String(sizes || '').split(',');
+function normList(list) {
+    const arr = Array.isArray(list) ? list : String(list || '').split(',');
     return arr.map(s => String(s).trim()).filter(Boolean).join(',');
 }
 function normStock(stock) {
@@ -143,7 +145,10 @@ function normStock(stock) {
     return Number.isFinite(n) ? Math.max(0, n) : null;
 }
 function itemsSummary(items) {
-    return items.map(i => i.name + (i.size ? ` (${i.size})` : '')).join(', ');
+    return items.map(i => {
+        const parts = [i.size, i.color].filter(Boolean);
+        return i.name + (parts.length ? ` (${parts.join(', ')})` : '');
+    }).join(', ');
 }
 async function applyStock(items) {
     for (const i of items) {
@@ -280,13 +285,13 @@ app.patch('/api/orders/:id', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/products', requireAdmin, async (req, res) => {
-    const { name, price, image, category, sizes, stock } = req.body || {};
+    const { name, price, image, category, sizes, colors, stock } = req.body || {};
     if (!name || !price || !image) return res.status(400).json({ error: 'Missing product fields' });
     try {
         const r = await pool.query(
-            'INSERT INTO products (name, price, category, image, sizes, stock) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            'INSERT INTO products (name, price, category, image, sizes, colors, stock) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
             [String(name).slice(0, 100), Number(price), String(category || '').toLowerCase().slice(0, 30), image,
-             normSizes(sizes), normStock(stock)]);
+             normList(sizes), normList(colors), normStock(stock)]);
         res.status(201).json(mapProduct(r.rows[0]));
     } catch (e) {
         console.error('Create product error:', e.message);
@@ -297,7 +302,7 @@ app.post('/api/products', requireAdmin, async (req, res) => {
 app.patch('/api/products/:id', requireAdmin, async (req, res) => {
     try {
         const id = Number(req.params.id);
-        const { name, price, image, category, sizes, stock } = req.body || {};
+        const { name, price, image, category, sizes, colors, stock } = req.body || {};
         const r = await pool.query('SELECT * FROM products WHERE id = $1', [id]);
         if (r.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
         const p = r.rows[0];
@@ -306,12 +311,13 @@ app.patch('/api/products/:id', requireAdmin, async (req, res) => {
             price: price !== undefined ? Number(price) : Number(p.price),
             image: image !== undefined ? image : p.image,
             category: category !== undefined ? String(category).toLowerCase().slice(0, 30) : p.category,
-            sizes: sizes !== undefined ? normSizes(sizes) : p.sizes,
+            sizes: sizes !== undefined ? normList(sizes) : p.sizes,
+            colors: colors !== undefined ? normList(colors) : p.colors,
             stock: stock !== undefined ? normStock(stock) : (p.stock ?? null)
         };
         const u = await pool.query(
-            'UPDATE products SET name = $1, price = $2, image = $3, category = $4, sizes = $5, stock = $6 WHERE id = $7 RETURNING *',
-            [merged.name, merged.price, merged.image, merged.category, merged.sizes, merged.stock, id]);
+            'UPDATE products SET name = $1, price = $2, image = $3, category = $4, sizes = $5, colors = $6, stock = $7 WHERE id = $8 RETURNING *',
+            [merged.name, merged.price, merged.image, merged.category, merged.sizes, merged.colors, merged.stock, id]);
         res.json(mapProduct(u.rows[0]));
     } catch (e) {
         console.error('Update product error:', e.message);
