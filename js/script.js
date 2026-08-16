@@ -293,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('checkout-form').reset();
         } catch (error) {
             console.error("Checkout failed:", error);
-            alert("There was an error processing your order. Please try again.");
+            alert("Error: " + error.message);
         }
     });
 

@@ -201,10 +201,9 @@ function esc(str) {
 function monimeHeaders(idempotencyKey) {
     return {
         'Authorization': `Bearer ${MONIME_TOKEN}`,
-        'Content-Type': 'application/json',
-        'Monime-Version': 'caph.2025-08-23',
         'Monime-Space-Id': MONIME_SPACE,
-        'Idempotency-Key': idempotencyKey
+        'Idempotency-Key': idempotencyKey,
+        'Content-Type': 'application/json'
     };
 }
 
@@ -220,7 +219,7 @@ app.post('/api/checkout/monime', async (req, res) => {
     }
 
     const origin = req.get('origin') || req.protocol + '://' + req.get('host');
-    const idempotencyKey = `emp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const idempotencyKey = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${Math.random().toString(36).slice(2, 8)}-${Math.random().toString(36).slice(2, 8)}`;
 
     try {
         // 1. Create the order locally first (status: Pending)
@@ -256,15 +255,11 @@ app.post('/api/checkout/monime', async (req, res) => {
         writeDb(db);
 
         // 2. Call Monime to create a hosted checkout session
-        // Amounts are in the currency's minor unit: SLE 1 = 100 (cents)
-        const amountInCents = Math.round(Number(amount) * 100);
-
+        // Amounts in minor units: SLE 25 = value 2500
         const sessionBody = {
             name: `Empire Fashion House - Order #EMP${orderId}`,
-            description: items.map(i => i.name).join(', '),
             successUrl: `${origin}/checkout-success.html?order_id=${orderId}`,
             cancelUrl: `${origin}/checkout-cancel.html?order_id=${orderId}`,
-            reference: `EMP${orderId}`,
             callbackState: `${orderId}`,
             lineItems: items.map(i => ({
                 type: 'custom',
@@ -274,17 +269,10 @@ app.post('/api/checkout/monime', async (req, res) => {
                     value: Math.round(Number(i.price) * 100)
                 },
                 quantity: 1
-            })),
-            paymentOptions: {
-                momo: { disable: false },
-                card: { disable: false },
-                bank: { disable: false },
-                wallet: { disable: false }
-            },
-            brandingOptions: {
-                primaryColor: '#D4AF37'
-            }
+            }))
         };
+
+        console.log('Monime request:', JSON.stringify(sessionBody, null, 2));
 
         const monimeRes = await fetch(`${MONIME_API}/v1/checkout-sessions`, {
             method: 'POST',
@@ -294,16 +282,17 @@ app.post('/api/checkout/monime', async (req, res) => {
 
         if (!monimeRes.ok) {
             const errBody = await monimeRes.text();
-            console.error('Monime error:', monimeRes.status, errBody);
-            return res.status(502).json({ error: 'Failed to create Monime checkout session. Try Cash on Delivery instead.' });
+            console.error('Monime API error:', monimeRes.status, errBody);
+            return res.status(502).json({ error: `Monime error (${monimeRes.status}): ${errBody}` });
         }
 
         const sessionData = await monimeRes.json();
+        console.log('Monime response:', JSON.stringify(sessionData).slice(0, 500));
         const redirectUrl = sessionData?.result?.redirectUrl;
 
         if (!redirectUrl) {
             console.error('Monime response missing redirectUrl:', JSON.stringify(sessionData).slice(0, 500));
-            return res.status(502).json({ error: 'Monime returned an unexpected response. Try again or use Cash on Delivery.' });
+            return res.status(502).json({ error: 'Monime returned no redirect URL. Try Cash on Delivery instead.' });
         }
 
         // Save the Monime session ID on our order
@@ -319,7 +308,7 @@ app.post('/api/checkout/monime', async (req, res) => {
 
     } catch (error) {
         console.error('Monime checkout error:', error);
-        res.status(500).json({ error: 'Something went wrong. Try Cash on Delivery instead.' });
+        res.status(500).json({ error: `Checkout error: ${error.message}` });
     }
 });
 
