@@ -3,38 +3,35 @@ const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
+const { Pool } = require('pg');
+
+// Load .env for local development (Render sets real env vars instead)
+const envFile = path.join(__dirname, '.env');
+if (process.env.NODE_ENV !== 'production' && fs.existsSync(envFile)) {
+    for (const line of fs.readFileSync(envFile, 'utf8').split(/\r?\n/)) {
+        const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+        if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2];
+    }
+}
 
 const app = express();
-const DB_FILE = path.join(__dirname, 'db.json');
 const PORT = process.env.PORT || 3000;
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+    console.error('FATAL: DATABASE_URL is not set. Create a PostgreSQL database and add its URL as an environment variable.');
+    process.exit(1);
+}
+
+const pool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+});
+pool.on('error', err => console.error('Unexpected Postgres pool error:', err.message));
 
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
-const ADMIN_PASS_HASH = process.env.ADMIN_PASS_HASH ||
-    bcrypt.hashSync('empire123', 10);
-
-// Passwords changed via Settings are stored in db.json and override the defaults
-function getAdmin() {
-    const db = readDb();
-    if (db.admin && db.admin.passwordHash) {
-        return { username: db.admin.username || ADMIN_USER, passwordHash: db.admin.passwordHash };
-    }
-    return { username: ADMIN_USER, passwordHash: ADMIN_PASS_HASH };
-}
 
 app.use(express.json({ limit: '15mb' }));
-
-// ---- JSON file database ----
-function readDb() {
-    return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-}
-function writeDb(db) {
-    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
-}
-function nextId(collection) {
-    return collection.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
-}
-
-// ---- Serve the static website ----
 app.use(express.static(__dirname));
 
 // ---- Session/auth setup ----
@@ -45,30 +42,130 @@ app.use(session({
     cookie: { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 8 }
 }));
 
+// ---- Database schema + one-time import from the old db.json ----
+async function initDb() {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS products (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            price NUMERIC(10,2) NOT NULL,
+            category TEXT NOT NULL DEFAULT 'uncategorized',
+            image TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS orders (
+            id SERIAL PRIMARY KEY,
+            customer TEXT NOT NULL,
+            email TEXT,
+            phone TEXT,
+            address TEXT,
+            product TEXT,
+            items JSONB NOT NULL DEFAULT '[]',
+            amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+            payment_method TEXT NOT NULL DEFAULT 'cod',
+            payment_ref TEXT NOT NULL DEFAULT '',
+            monime_session_id TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'Pending',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS customers (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            email TEXT,
+            spent NUMERIC(12,2) NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS admin (
+            id INT PRIMARY KEY,
+            username TEXT NOT NULL,
+            password_hash TEXT NOT NULL
+        );
+    `);
+
+    const adminCount = await pool.query('SELECT COUNT(*)::int AS n FROM admin');
+    if (adminCount.rows[0].n === 0) {
+        await pool.query('INSERT INTO admin (id, username, password_hash) VALUES (1, $1, $2)',
+            [ADMIN_USER, bcrypt.hashSync('empire123', 10)]);
+    }
+
+    // First boot on a fresh database: import old db.json data if the DB is empty
+    const dbFile = path.join(__dirname, 'db.json');
+    const prodCount = await pool.query('SELECT COUNT(*)::int AS n FROM products');
+    if (prodCount.rows[0].n === 0 && fs.existsSync(dbFile)) {
+        try {
+            const old = JSON.parse(fs.readFileSync(dbFile, 'utf8'));
+            for (const p of old.products || []) {
+                await pool.query('INSERT INTO products (name, price, category, image) VALUES ($1, $2, $3, $4)',
+                    [String(p.name).slice(0, 100), Number(p.price) || 0, String(p.category || '').toLowerCase(), p.image || '']);
+            }
+            for (const c of old.customers || []) {
+                await pool.query('INSERT INTO customers (name, email, spent) VALUES ($1, $2, $3) ON CONFLICT (name) DO NOTHING',
+                    [String(c.name).slice(0, 100), c.email || 'unknown@example.com', parseFloat(c.spent) || 0]);
+            }
+            for (const o of old.orders || []) {
+                await pool.query(
+                    `INSERT INTO orders (customer, email, phone, address, product, items, amount, payment_method, payment_ref, status)
+                     VALUES ($1, $2, $3, $4, $5, '[]'::jsonb, $6, $7, $8, $9)`,
+                    [String(o.customer).slice(0, 100), o.email || '', o.phone || '', o.address || '',
+                     o.product || '', parseFloat(o.amount) || 0, o.paymentMethod || 'cod', o.paymentRef || '', o.status || 'Pending']);
+            }
+            console.log(`Imported ${(old.products || []).length} products and ${(old.orders || []).length} orders from db.json`);
+        } catch (e) {
+            console.error('db.json import skipped:', e.message);
+        }
+    }
+}
+
+// ---- Row mappers (keep the same JSON shape the frontend already uses) ----
+function mapProduct(r) {
+    return { id: r.id, name: r.name, price: Number(r.price), category: r.category, image: r.image };
+}
+function mapOrder(r) {
+    return {
+        id: r.id, customer: r.customer, email: r.email, phone: r.phone, address: r.address,
+        product: r.product, items: r.items || [], amount: Number(r.amount),
+        paymentMethod: r.payment_method, paymentRef: r.payment_ref, monimeSessionId: r.monime_session_id,
+        status: r.status, date: r.date
+    };
+}
+
+async function getAdmin() {
+    const r = await pool.query('SELECT username, password_hash FROM admin WHERE id = 1');
+    return r.rows[0];
+}
+
+// ---- Auth ----
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body || {};
-    const admin = getAdmin();
-    if (username === admin.username && await bcrypt.compare(password || '', admin.passwordHash)) {
-        req.session.admin = true;
-        res.json({ ok: true });
-    } else {
-        res.status(401).json({ ok: false, error: 'Invalid username or password' });
+    try {
+        const admin = await getAdmin();
+        if (admin && username === admin.username && await bcrypt.compare(password || '', admin.password_hash)) {
+            req.session.admin = true;
+            res.json({ ok: true });
+        } else {
+            res.status(401).json({ ok: false, error: 'Invalid username or password' });
+        }
+    } catch (e) {
+        console.error('Login error:', e.message);
+        res.status(500).json({ error: 'Server error' });
     }
 });
 
 app.post('/api/password', requireAdmin, async (req, res) => {
     const { currentPassword, newPassword } = req.body || {};
-    const admin = getAdmin();
-    if (!await bcrypt.compare(currentPassword || '', admin.passwordHash)) {
-        return res.status(401).json({ error: 'Current password is incorrect' });
+    try {
+        const admin = await getAdmin();
+        if (!await bcrypt.compare(currentPassword || '', admin.password_hash)) {
+            return res.status(401).json({ error: 'Current password is incorrect' });
+        }
+        if (!newPassword || String(newPassword).length < 6) {
+            return res.status(400).json({ error: 'New password must be at least 6 characters' });
+        }
+        await pool.query('UPDATE admin SET password_hash = $1 WHERE id = 1', [bcrypt.hashSync(String(newPassword), 10)]);
+        res.json({ ok: true });
+    } catch (e) {
+        console.error('Password change error:', e.message);
+        res.status(500).json({ error: 'Server error' });
     }
-    if (!newPassword || String(newPassword).length < 6) {
-        return res.status(400).json({ error: 'New password must be at least 6 characters' });
-    }
-    const db = readDb();
-    db.admin = { username: admin.username, passwordHash: bcrypt.hashSync(String(newPassword), 10) };
-    writeDb(db);
-    res.json({ ok: true });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -84,108 +181,110 @@ function requireAdmin(req, res, next) {
     res.status(403).json({ error: 'Unauthorized' });
 }
 
-// ---- Public API (anyone can use) ----
-app.get('/api/products', (req, res) => res.json(readDb().products));
+// ---- Public API ----
+app.get('/api/products', async (req, res) => {
+    const r = await pool.query('SELECT * FROM products ORDER BY id');
+    res.json(r.rows.map(mapProduct));
+});
 
-app.post('/api/orders', (req, res) => {
+app.post('/api/orders', async (req, res) => {
     const { customer, email, phone, address, items, amount, paymentMethod, paymentRef } = req.body || {};
     if (!customer || !Array.isArray(items) || items.length === 0 || !amount) {
         return res.status(400).json({ error: 'Missing order details' });
     }
-    const PAYMENT_METHODS = ['cod', 'orange', 'afrimoney'];
-    const method = PAYMENT_METHODS.includes(paymentMethod) ? paymentMethod : 'cod';
-    if ((method === 'orange' || method === 'afrimoney') && !paymentRef) {
-        return res.status(400).json({ error: 'Transaction reference required for mobile money orders' });
-    }
-    const db = readDb();
-    const order = {
-        id: nextId(db.orders),
-        customer: String(customer).slice(0, 100),
-        email: String(email || '').slice(0, 100),
-        phone: String(phone || '').slice(0, 30),
-        address: String(address || '').slice(0, 200),
-        product: items.map(i => i.name).join(', '),
-        amount: Number(amount),
-        paymentMethod: method,
-        paymentRef: paymentRef ? String(paymentRef).slice(0, 50) : '',
-        date: new Date().toISOString().split('T')[0],
-        status: 'Pending'
-    };
-    db.orders.push(order);
+    const method = ['cod'].includes(paymentMethod) ? paymentMethod : 'cod';
+    try {
+        const r = await pool.query(
+            `INSERT INTO orders (customer, email, phone, address, product, items, amount, payment_method, payment_ref, status)
+             VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, 'Pending')
+             RETURNING *, to_char(created_at, 'YYYY-MM-DD') AS date`,
+            [String(customer).slice(0, 100), String(email || '').slice(0, 100), String(phone || '').slice(0, 30),
+             String(address || '').slice(0, 200), items.map(i => i.name).join(', '),
+             JSON.stringify(items), Number(amount), method, paymentRef ? String(paymentRef).slice(0, 50) : '']);
+        const order = mapOrder(r.rows[0]);
 
-    let cust = db.customers.find(c => c.name === order.customer);
-    if (cust) {
-        cust.spent = (parseFloat(cust.spent) || 0) + order.amount;
-    } else {
-        db.customers.push({
-            id: nextId(db.customers),
-            name: order.customer,
-            email: order.email || 'unknown@example.com',
-            spent: order.amount
-        });
+        await pool.query(
+            `INSERT INTO customers (name, email, spent) VALUES ($1, $2, $3)
+             ON CONFLICT (name) DO UPDATE SET spent = customers.spent + EXCLUDED.spent`,
+            [order.customer, order.email || 'unknown@example.com', order.amount]);
+
+        res.status(201).json(order);
+    } catch (e) {
+        console.error('Create order error:', e.message);
+        res.status(500).json({ error: 'Could not save order' });
     }
-    writeDb(db);
-    res.status(201).json(order);
 });
 
 // ---- Admin-only API ----
-app.get('/api/orders', requireAdmin, (req, res) => res.json(readDb().orders));
-app.get('/api/customers', requireAdmin, (req, res) => res.json(readDb().customers));
+app.get('/api/orders', requireAdmin, async (req, res) => {
+    const r = await pool.query(`SELECT *, to_char(created_at, 'YYYY-MM-DD') AS date FROM orders ORDER BY created_at DESC`);
+    res.json(r.rows.map(mapOrder));
+});
 
-app.patch('/api/orders/:id', requireAdmin, (req, res) => {
-    const db = readDb();
-    const order = db.orders.find(o => o.id === Number(req.params.id));
-    if (!order) return res.status(404).json({ error: 'Order not found' });
+app.get('/api/customers', requireAdmin, async (req, res) => {
+    const r = await pool.query('SELECT id, name, email, spent FROM customers ORDER BY spent DESC');
+    res.json(r.rows.map(c => ({ id: c.id, name: c.name, email: c.email, spent: Number(c.spent) })));
+});
+
+app.patch('/api/orders/:id', requireAdmin, async (req, res) => {
     const allowed = ['Pending', 'Paid', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
     if (!allowed.includes(req.body.status)) {
         return res.status(400).json({ error: 'Invalid status' });
     }
-    order.status = req.body.status;
-    writeDb(db);
-    res.json(order);
+    try {
+        const r = await pool.query(
+            `UPDATE orders SET status = $1 WHERE id = $2
+             RETURNING *, to_char(created_at, 'YYYY-MM-DD') AS date`,
+            [req.body.status, Number(req.params.id)]);
+        if (r.rows.length === 0) return res.status(404).json({ error: 'Order not found' });
+        res.json(mapOrder(r.rows[0]));
+    } catch (e) {
+        console.error('Update order error:', e.message);
+        res.status(500).json({ error: 'Server error' });
+    }
 });
 
-app.post('/api/products', requireAdmin, (req, res) => {
+app.post('/api/products', requireAdmin, async (req, res) => {
     const { name, price, image, category } = req.body || {};
     if (!name || !price || !image) return res.status(400).json({ error: 'Missing product fields' });
-    const db = readDb();
-    const product = {
-        id: nextId(db.products),
-        name: String(name).slice(0, 100),
-        price: Number(price),
-        category: String(category || '').toLowerCase().slice(0, 30),
-        image
-    };
-    db.products.push(product);
-    writeDb(db);
-    res.status(201).json(product);
+    try {
+        const r = await pool.query(
+            'INSERT INTO products (name, price, category, image) VALUES ($1, $2, $3, $4) RETURNING *',
+            [String(name).slice(0, 100), Number(price), String(category || '').toLowerCase().slice(0, 30), image]);
+        res.status(201).json(mapProduct(r.rows[0]));
+    } catch (e) {
+        console.error('Create product error:', e.message);
+        res.status(500).json({ error: 'Server error' });
+    }
 });
 
-app.patch('/api/products/:id', requireAdmin, (req, res) => {
-    const db = readDb();
-    const product = db.products.find(p => p.id === Number(req.params.id));
-    if (!product) return res.status(404).json({ error: 'Product not found' });
-    const { name, price, image, category } = req.body || {};
-    if (name !== undefined) product.name = String(name).slice(0, 100);
-    if (price !== undefined) product.price = Number(price);
-    if (image !== undefined) product.image = image;
-    if (category !== undefined) product.category = String(category).toLowerCase().slice(0, 30);
-    writeDb(db);
-    res.json(product);
+app.patch('/api/products/:id', requireAdmin, async (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        const { name, price, image, category } = req.body || {};
+        const r = await pool.query('SELECT * FROM products WHERE id = $1', [id]);
+        if (r.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
+        const p = r.rows[0];
+        const merged = {
+            name: name !== undefined ? String(name).slice(0, 100) : p.name,
+            price: price !== undefined ? Number(price) : Number(p.price),
+            image: image !== undefined ? image : p.image,
+            category: category !== undefined ? String(category).toLowerCase().slice(0, 30) : p.category
+        };
+        const u = await pool.query(
+            'UPDATE products SET name = $1, price = $2, image = $3, category = $4 WHERE id = $5 RETURNING *',
+            [merged.name, merged.price, merged.image, merged.category, id]);
+        res.json(mapProduct(u.rows[0]));
+    } catch (e) {
+        console.error('Update product error:', e.message);
+        res.status(500).json({ error: 'Server error' });
+    }
 });
 
-app.delete('/api/products/:id', requireAdmin, (req, res) => {
-    const db = readDb();
-    const before = db.products.length;
-    db.products = db.products.filter(p => p.id !== Number(req.params.id));
-    if (db.products.length === before) return res.status(404).json({ error: 'Product not found' });
-    writeDb(db);
+app.delete('/api/products/:id', requireAdmin, async (req, res) => {
+    const r = await pool.query('DELETE FROM products WHERE id = $1', [Number(req.params.id)]);
+    if (r.rowCount === 0) return res.status(404).json({ error: 'Product not found' });
     res.json({ ok: true });
-});
-
-// Redirect old json-server URLs
-app.use(['/products', '/orders', '/customers'], (req, res) => {
-    res.redirect(308, req.originalUrl.replace(/^\/(products|orders|customers)/, m => '/api' + m));
 });
 
 // ---- Monime Payment Gateway ----
@@ -223,36 +322,19 @@ app.post('/api/checkout/monime', async (req, res) => {
 
     try {
         // 1. Create the order locally first (status: Pending)
-        const db = readDb();
-        const orderId = nextId(db.orders);
-        const order = {
-            id: orderId,
-            customer: String(customer).slice(0, 100),
-            email: String(email || '').slice(0, 100),
-            phone: String(phone || '').slice(0, 30),
-            address: String(address || '').slice(0, 200),
-            product: items.map(i => i.name).join(', '),
-            amount: Number(amount),
-            paymentMethod: 'monime',
-            paymentRef: '',
-            monimeSessionId: '',
-            date: new Date().toISOString().split('T')[0],
-            status: 'Pending'
-        };
-        db.orders.push(order);
+        const ins = await pool.query(
+            `INSERT INTO orders (customer, email, phone, address, product, items, amount, payment_method, payment_ref, monime_session_id, status)
+             VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, 'monime', '', '', 'Pending')
+             RETURNING id`,
+            [String(customer).slice(0, 100), String(email || '').slice(0, 100), String(phone || '').slice(0, 30),
+             String(address || '').slice(0, 200), items.map(i => i.name).join(', '),
+             JSON.stringify(items), Number(amount)]);
+        const orderId = ins.rows[0].id;
 
-        let cust = db.customers.find(c => c.name === order.customer);
-        if (cust) {
-            cust.spent = (parseFloat(cust.spent) || 0) + order.amount;
-        } else {
-            db.customers.push({
-                id: nextId(db.customers),
-                name: order.customer,
-                email: order.email || 'unknown@example.com',
-                spent: order.amount
-            });
-        }
-        writeDb(db);
+        await pool.query(
+            `INSERT INTO customers (name, email, spent) VALUES ($1, $2, $3)
+             ON CONFLICT (name) DO UPDATE SET spent = customers.spent + EXCLUDED.spent`,
+            [String(customer).slice(0, 100), String(email || '').slice(0, 100) || 'unknown@example.com', Number(amount)]);
 
         // 2. Call Monime to create a hosted checkout session
         // Amounts in minor units: SLE 25 = value 2500
@@ -272,8 +354,6 @@ app.post('/api/checkout/monime', async (req, res) => {
             }))
         };
 
-        console.log('Monime request:', JSON.stringify(sessionBody, null, 2));
-
         const monimeRes = await fetch(`${MONIME_API}/v1/checkout-sessions`, {
             method: 'POST',
             headers: monimeHeaders(idempotencyKey),
@@ -287,7 +367,6 @@ app.post('/api/checkout/monime', async (req, res) => {
         }
 
         const sessionData = await monimeRes.json();
-        console.log('Monime response:', JSON.stringify(sessionData).slice(0, 500));
         const redirectUrl = sessionData?.result?.redirectUrl;
 
         if (!redirectUrl) {
@@ -295,13 +374,8 @@ app.post('/api/checkout/monime', async (req, res) => {
             return res.status(502).json({ error: 'Monime returned no redirect URL. Try Cash on Delivery instead.' });
         }
 
-        // Save the Monime session ID on our order
-        const db2 = readDb();
-        const savedOrder = db2.orders.find(o => o.id === orderId);
-        if (savedOrder) {
-            savedOrder.monimeSessionId = sessionData.result.id || '';
-            writeDb(db2);
-        }
+        await pool.query('UPDATE orders SET monime_session_id = $1 WHERE id = $2',
+            [sessionData.result.id || '', orderId]);
 
         // 3. Return the redirect URL so the frontend can send the customer there
         res.json({ redirectUrl, orderId });
@@ -323,27 +397,28 @@ app.post('/api/monime/webhook', async (req, res) => {
         const orderNumber = req.body?.data?.orderNumber;
         const callbackState = req.body?.data?.callbackState;
 
-        // Only process checkout_session.completed events
         if (eventName === 'checkout_session.completed' && status === 'completed') {
-            const db = readDb();
-            // Find order by callbackState (our order ID) or by monimeSessionId
-            let order = null;
+            let orderId = null;
             if (callbackState) {
-                order = db.orders.find(o => o.id === Number(callbackState));
+                const byState = await pool.query('SELECT id FROM orders WHERE id = $1 AND status = $2', [Number(callbackState), 'Pending']);
+                if (byState.rows.length > 0) orderId = byState.rows[0].id;
             }
-            if (!order && sessionId) {
-                order = db.orders.find(o => o.monimeSessionId === sessionId);
+            if (orderId === null && sessionId) {
+                const bySession = await pool.query('SELECT id FROM orders WHERE monime_session_id = $1', [sessionId]);
+                if (bySession.rows.length > 0) orderId = bySession.rows[0].id;
             }
-            if (!order && orderNumber) {
-                order = db.orders.find(o => `EMP${o.id}` === orderNumber);
+            if (orderId === null && orderNumber) {
+                const num = String(orderNumber).replace(/^EMP/, '');
+                if (/^\d+$/.test(num)) {
+                    const byNum = await pool.query('SELECT id FROM orders WHERE id = $1', [Number(num)]);
+                    if (byNum.rows.length > 0) orderId = byNum.rows[0].id;
+                }
             }
 
-            if (order && order.status === 'Pending') {
-                order.status = 'Paid';
-                if (sessionId) order.monimeSessionId = sessionId;
-                if (orderNumber) order.paymentRef = orderNumber;
-                writeDb(db);
-                console.log(`Order #EMP${order.id} marked as Paid via Monime`);
+            if (orderId !== null) {
+                await pool.query('UPDATE orders SET status = $1, payment_ref = $2, monime_session_id = COALESCE(NULLIF($3, \'\'), monime_session_id) WHERE id = $4',
+                    ['Paid', orderNumber || '', sessionId || '', orderId]);
+                console.log(`Order #EMP${orderId} marked as Paid via Monime`);
             }
         }
 
@@ -384,9 +459,14 @@ app.get('/checkout-cancel.html', (req, res) => {
 .box a:hover{background:#D4AF37;}
 </style></head><body><div class="box"><div class="icon">💳</div><h1>Payment Cancelled</h1>
 <p>Your payment was not completed. Order #EMP${esc(orderId)} remains pending. You can try again or pay with Cash on Delivery.</p>
-<a href="/">Continue Shopping</a><a href="/">Try Again</a></div></body></html>`);
+<a href="/">Continue Shopping</a></div></body></html>`);
 });
 
-app.listen(PORT, () => {
-    console.log(`Empire Fashion House running at http://localhost:${PORT}`);
+initDb().then(() => {
+    app.listen(PORT, () => {
+        console.log(`Empire Fashion House running at http://localhost:${PORT} (PostgreSQL connected)`);
+    });
+}).catch(e => {
+    console.error('Database init failed:', e);
+    process.exit(1);
 });
