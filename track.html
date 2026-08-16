@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Track Your Order - Empire Fashion House</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        body {
+            background: #111;
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            box-sizing: border-box;
+        }
+        .track-logo { height: 60px; margin-bottom: 25px; }
+        .track-box {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            width: 100%;
+            max-width: 520px;
+            padding: 35px 30px;
+        }
+        .track-box h1 {
+            color: #111;
+            font-size: 24px;
+            text-align: center;
+            margin: 0 0 8px;
+        }
+        .track-box .sub {
+            color: #777;
+            text-align: center;
+            font-size: 14px;
+            margin-bottom: 25px;
+        }
+        .track-form { display: flex; gap: 10px; }
+        .track-form input {
+            flex: 1;
+            padding: 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 15px;
+            outline: none;
+            transition: border 0.2s;
+        }
+        .track-form input:focus { border-color: #D4AF37; }
+        .track-form button {
+            padding: 14px 22px;
+            background: #D4AF37;
+            color: #111;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .track-form button:hover { background: #b8941f; }
+        .msg { text-align: center; color: #dc3545; font-size: 14px; margin-top: 18px; display: none; }
+        .order-card {
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .order-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 5px;
+        }
+        .order-head .oid { font-weight: bold; font-size: 17px; color: #111; }
+        .order-head .odate { color: #999; font-size: 13px; }
+        .order-product { color: #555; font-size: 14px; margin-bottom: 4px; }
+        .order-total { color: #D4AF37; font-weight: bold; font-size: 18px; margin-bottom: 15px; }
+        .status-pill {
+            display: inline-block;
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .st-pending { background: #fff3cd; color: #856404; }
+        .st-paid { background: #d4edda; color: #155724; }
+        .st-processing { background: #e2d9f3; color: #4b2e83; }
+        .st-shipped { background: #d1ecf1; color: #0c5460; }
+        .st-delivered { background: #d4edda; color: #155724; }
+        .st-cancelled { background: #f8d7da; color: #721c24; }
+        .timeline { margin-top: 18px; }
+        .t-step {
+            display: flex;
+            gap: 14px;
+            align-items: flex-start;
+            position: relative;
+            padding-bottom: 26px;
+        }
+        .t-step:last-child { padding-bottom: 0; }
+        .t-step::before {
+            content: '';
+            position: absolute;
+            left: 11px;
+            top: 24px;
+            bottom: 0;
+            width: 2px;
+            background: #e0e0e0;
+        }
+        .t-step:last-child::before { display: none; }
+        .t-dot {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #e0e0e0;
+            flex-shrink: 0;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .t-step.done .t-dot { background: #D4AF37; }
+        .t-step.current .t-dot { background: #111; box-shadow: 0 0 0 4px rgba(212,175,55,0.35); }
+        .t-label { font-size: 14px; padding-top: 2px; color: #999; }
+        .t-step.done .t-label, .t-step.current .t-label { color: #111; font-weight: bold; }
+        .cancel-banner {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            margin-top: 15px;
+        }
+        .track-footer { color: #666; font-size: 13px; margin-top: 30px; text-align: center; }
+        .track-footer a { color: #D4AF37; text-decoration: none; }
+        .back-store {
+            display: inline-block;
+            margin-top: 25px;
+            padding: 12px 30px;
+            background: #D4AF37;
+            color: #111;
+            border-radius: 6px;
+            font-weight: bold;
+            text-decoration: none;
+        }
+        @media (max-width: 480px) {
+            .track-form { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <img src="assets/images/logo.jpeg" alt="Empire Fashion House" class="track-logo">
+
+    <div class="track-box">
+        <h1>Track Your Order</h1>
+        <p class="sub">Enter your order number (e.g. EMP12) or the phone number you ordered with.</p>
+
+        <form class="track-form" id="track-form">
+            <input type="text" id="track-input" placeholder="Order number or phone" required>
+            <button type="submit">Track</button>
+        </form>
+
+        <div id="track-msg" class="msg"></div>
+        <div id="track-results"></div>
+    </div>
+
+    <a href="/" class="back-store">← Continue Shopping</a>
+    <p class="track-footer">Need help? <a href="https://wa.me/23233600560" target="_blank">Chat with us on WhatsApp</a></p>
+
+    <script>
+        const STEPS = ['Order Placed', 'Confirmed', 'Processing', 'Shipped', 'Delivered'];
+        const STEP_INDEX = { 'Pending': 1, 'Paid': 2, 'Processing': 3, 'Shipped': 4, 'Delivered': 5 };
+
+        function esc(str) {
+            const d = document.createElement('div');
+            d.textContent = String(str ?? '');
+            return d.innerHTML;
+        }
+
+        function timelineHTML(status) {
+            if (status === 'Cancelled') {
+                return `<div class="cancel-banner">✖ This order was cancelled. Contact us on WhatsApp if this is a mistake.</div>`;
+            }
+            const done = STEP_INDEX[status] || 1;
+            return `<div class="timeline">` + STEPS.map((label, i) => {
+                const n = i + 1;
+                const cls = n < done ? 'done' : n === done ? 'current done' : '';
+                const check = n < done ? '✓' : '';
+                return `<div class="t-step ${cls}"><div class="t-dot">${check}</div><div class="t-label">${label}</div></div>`;
+            }).join('') + `</div>`;
+        }
+
+        function orderCardHTML(o) {
+            const pay = o.paymentMethod === 'monime' ? '💳 Paid via Monime' : '💵 Cash on Delivery';
+            return `
+                <div class="order-card">
+                    <div class="order-head">
+                        <span class="oid">#EMP${o.id}</span>
+                        <span class="odate">${o.date ? new Date(o.date).toLocaleDateString() : ''}</span>
+                        <span class="status-pill st-${esc(String(o.status).toLowerCase())}">${esc(o.status)}</span>
+                    </div>
+                    <p class="order-product">${esc(o.product)}</p>
+                    <p class="order-total">NLE ${(parseFloat(o.amount) || 0).toLocaleString()} <small style="color:#999;font-weight:normal;">· ${pay}</small></p>
+                    ${timelineHTML(o.status)}
+                </div>
+            `;
+        }
+
+        document.getElementById('track-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const q = document.getElementById('track-input').value.trim();
+            const msgEl = document.getElementById('track-msg');
+            const resEl = document.getElementById('track-results');
+            msgEl.style.display = 'none';
+            resEl.innerHTML = '<p style="text-align:center;color:#999;padding:20px 0;">Searching…</p>';
+
+            try {
+                const res = await fetch('/api/track?q=' + encodeURIComponent(q));
+                const data = await res.json();
+                if (!res.ok) {
+                    resEl.innerHTML = '';
+                    msgEl.textContent = data.error || 'Something went wrong.';
+                    msgEl.style.display = 'block';
+                    return;
+                }
+                resEl.innerHTML = data.orders.map(orderCardHTML).join('');
+                if (data.orders.length > 1) {
+                    resEl.insertAdjacentHTML('afterbegin', `<p style="color:#999;font-size:13px;margin:20px 0 -5px;">Found ${data.orders.length} orders for this phone number:</p>`);
+                }
+            } catch (err) {
+                resEl.innerHTML = '';
+                msgEl.textContent = 'Cannot connect to server. Please try again.';
+                msgEl.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

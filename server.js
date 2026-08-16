@@ -331,6 +331,40 @@ app.delete('/api/products/:id', requireAdmin, async (req, res) => {
     res.json({ ok: true });
 });
 
+// ---- Public order tracking (no login; no personal details exposed) ----
+app.get('/api/track', async (req, res) => {
+    const q = String(req.query.q || '').trim().slice(0, 40);
+    if (q.length < 3) return res.status(400).json({ error: 'Please enter your order number or phone number.' });
+    try {
+        const cols = `id, product, amount, status, payment_method, to_char(created_at, 'YYYY-MM-DD') AS date`;
+        const num = q.replace(/^emp/i, '');
+        let rows = [];
+        if (/^\d+$/.test(num) && num.length <= 8) {
+            rows = (await pool.query(`SELECT ${cols} FROM orders WHERE id = $1`, [Number(num)])).rows;
+        }
+        if (rows.length === 0) {
+            const digits = q.replace(/\D/g, '');
+            if (digits.length >= 7) {
+                rows = (await pool.query(
+                    `SELECT ${cols} FROM orders WHERE regexp_replace(phone, '[^0-9]', '', 'g') LIKE '%' || $1
+                     ORDER BY created_at DESC LIMIT 20`, [digits])).rows;
+            }
+        }
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'No order found. Check the order number or the phone number you ordered with.' });
+        }
+        res.json({
+            orders: rows.map(r => ({
+                id: r.id, date: r.date, product: r.product, amount: Number(r.amount),
+                status: r.status, paymentMethod: r.payment_method
+            }))
+        });
+    } catch (e) {
+        console.error('Track error:', e.message);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 // ---- Monime Payment Gateway ----
 const MONIME_TOKEN = process.env.MONIME_TOKEN || '';
 const MONIME_SPACE = process.env.MONIME_SPACE || '';

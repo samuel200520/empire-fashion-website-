@@ -600,6 +600,60 @@ async function handlePasswordSubmit(e) {
     }
 }
 
+// ---- 13. New Order Alerts ----
+let maxOrderId = 0;
+let alertsOn = localStorage.getItem('order_alerts') !== 'off';
+
+function beep() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        [0, 0.35].forEach(t => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = 880;
+            gain.gain.setValueAtTime(0.001, ctx.currentTime + t);
+            gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + t + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.3);
+            osc.connect(gain).connect(ctx.destination);
+            osc.start(ctx.currentTime + t);
+            osc.stop(ctx.currentTime + t + 0.32);
+        });
+    } catch (e) { }
+}
+
+function notifyNewOrders(fresh) {
+    if (!alertsOn) return;
+    beep();
+    showToast(`🔔 ${fresh.length} new order${fresh.length > 1 ? 's' : ''}! ${fresh.map(o => `#EMP${o.id} (NLE ${o.amount})`).join(', ')}`);
+    if ('Notification' in window && Notification.permission === 'granted') {
+        fresh.slice(0, 3).forEach(o => {
+            const pay = o.paymentMethod === 'monime' ? 'Monime' : 'COD';
+            new Notification(`🛒 New Order #EMP${o.id}`, {
+                body: `${o.customer} — NLE ${o.amount} (${pay})`,
+                tag: 'order-' + o.id
+            });
+        });
+    }
+}
+
+// Poll for new orders every 30s while the dashboard is open
+async function pollOrders() {
+    try {
+        const orders = await fetchJson(`${API_URL}/api/orders`);
+        const fresh = orders.filter(o => o.id > maxOrderId);
+        allOrders = orders.sort((a, b) => new Date(b.date) - new Date(a.date));
+        if (fresh.length > 0 && maxOrderId > 0) {
+            notifyNewOrders(fresh);
+            renderOrders();
+            renderDashboard();
+            renderCustomers();
+            updateBadges();
+        }
+        maxOrderId = orders.reduce((m, o) => Math.max(m, o.id), 0);
+    } catch (e) { /* transient network error — retry on next tick */ }
+}
+
 // ---- 12. Initialize ----
 document.addEventListener('DOMContentLoaded', async () => {
     const authed = await checkAuth();
@@ -631,5 +685,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     const passwordForm = document.getElementById('password-form');
     if (passwordForm) passwordForm.addEventListener('submit', handlePasswordSubmit);
 
+    // Order alerts toggle
+    const alertsBtn = document.getElementById('alerts-toggle');
+    if (alertsBtn) {
+        const syncBtn = () => { alertsBtn.innerText = alertsOn ? 'Alerts: ON 🔔' : 'Alerts: OFF 🔕'; };
+        syncBtn();
+        alertsBtn.addEventListener('click', async () => {
+            alertsOn = !alertsOn;
+            localStorage.setItem('order_alerts', alertsOn ? 'on' : 'off');
+            if (alertsOn && 'Notification' in window && Notification.permission === 'default') {
+                await Notification.requestPermission();
+            }
+            syncBtn();
+            showToast(alertsOn ? 'Order alerts enabled.' : 'Order alerts disabled.');
+        });
+    }
+    // Browsers need a user click before showing notification permission prompts
+    if (alertsOn && 'Notification' in window && Notification.permission === 'default') {
+        document.addEventListener('click', () => Notification.requestPermission(), { once: true });
+    }
+
     loadAllData();
+    setInterval(pollOrders, 30000);
 });
