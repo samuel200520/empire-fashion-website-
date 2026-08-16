@@ -418,7 +418,7 @@ async function submitProduct(name, price, category, image) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });
-        if (!res.ok) throw new Error();
+        if (!res.ok) throw new Error(await serverError(res));
         showToast('Product updated!');
     } else {
         if (!image) {
@@ -430,7 +430,7 @@ async function submitProduct(name, price, category, image) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, price, category, image })
         });
-        if (!res.ok) throw new Error();
+        if (!res.ok) throw new Error(await serverError(res));
         showToast('Product saved to database!');
     }
     cancelEdit();
@@ -438,25 +438,56 @@ async function submitProduct(name, price, category, image) {
     return true;
 }
 
-function handleProductSubmit(e) {
+async function serverError(res) {
+    let msg = `Server error (${res.status})`;
+    try { msg = (await res.json()).error || msg; } catch (e) { }
+    return msg;
+}
+
+// Resize + compress in the browser so photos from a phone don't blow up the upload
+function compressImage(file, maxSide = 900, quality = 0.82) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Could not read the image file.'));
+        reader.onload = ev => {
+            const img = new Image();
+            img.onerror = () => reject(new Error('Could not load the image. Try a JPG or PNG.'));
+            img.onload = () => {
+                const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.round(img.width * scale);
+                canvas.height = Math.round(img.height * scale);
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL('image/jpeg', quality));
+            };
+            img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+async function handleProductSubmit(e) {
     e.preventDefault();
     const name = document.getElementById('product-name').value;
     const price = parseFloat(document.getElementById('product-price').value);
     const category = document.getElementById('product-category').value;
     const imageInput = document.getElementById('product-image');
+    const submitBtn = document.getElementById('product-submit-btn');
 
-    const send = (image) => submitProduct(name, price, category, image)
-        .catch(err => {
-            console.error(err);
-            showToast('Failed to save product.');
-        });
-
-    if (imageInput.files && imageInput.files[0]) {
-        const reader = new FileReader();
-        reader.onload = ev => send(ev.target.result);
-        reader.readAsDataURL(imageInput.files[0]);
-    } else {
-        send(null);
+    let image = null;
+    try {
+        if (imageInput.files && imageInput.files[0]) {
+            submitBtn.disabled = true;
+            submitBtn.innerText = 'Saving...';
+            image = await compressImage(imageInput.files[0]);
+        }
+        await submitProduct(name, price, category, image);
+    } catch (err) {
+        console.error(err);
+        showToast('Failed to save product: ' + err.message);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Publish to Store';
     }
 }
 
