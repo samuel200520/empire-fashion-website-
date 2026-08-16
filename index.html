@@ -3,7 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Empire Fashion House</title>
+    <title>Empire Fashion House — Premium Fashion in Freetown, Sierra Leone</title>
+    <meta name="description" content="Empire Fashion House — Sierra Leone's premier destination for premium streetwear and luxury fashion. Shop sneakers, clothing and accessories. Cash on Delivery & Monime payments. Delivery in Freetown and beyond.">
+    <meta property="og:title" content="Empire Fashion House">
+    <meta property="og:description" content="Redefining style. Wear the crown. Premium fashion delivered in Sierra Leone.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="assets/images/logo.jpeg">
+    <link rel="icon" type="image/jpeg" href="assets/images/logo.jpeg">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -22,6 +28,7 @@
             </ul>
         </nav>
         <div class="header-actions">
+            <div class="wishlist-btn" onclick="toggleWishlistPanel()" title="Wishlist">♥ <span id="wishlist-count">0</span></div>
             <div class="cart-btn" onclick="toggleCart()">🛒 Cart (<span id="cart-count">0</span>)</div>
             <button class="hamburger" id="hamburger-btn" onclick="toggleMobileNav()">☰</button>
         </div>
@@ -44,6 +51,17 @@
 
     <div class="products-container" id="products-section">
         <h2 id="collection-title">Featured Collection</h2>
+        <div class="store-controls">
+            <div class="store-search">
+                <input type="text" id="store-search" placeholder="🔍 Search products, colors...">
+            </div>
+            <select id="sort-select" class="sort-select">
+                <option value="featured">Sort: Featured</option>
+                <option value="newest">Sort: Newest</option>
+                <option value="price-asc">Price: Low to High</option>
+                <option value="price-desc">Price: High to Low</option>
+            </select>
+        </div>
         <div id="product-grid" class="products"></div>
     </div>
 
@@ -98,10 +116,14 @@
     <div id="product-modal" class="product-modal">
         <div class="product-detail">
             <button class="close-btn pd-close" onclick="closeProduct()">&times;</button>
-            <div class="pd-image"><img id="pd-image" src="" alt=""></div>
+            <div>
+                <div class="pd-image"><img id="pd-image" src="" alt=""></div>
+                <div id="pd-thumbs" class="pd-thumbs"></div>
+            </div>
             <div class="pd-info">
                 <h2 id="pd-name"></h2>
                 <p class="pd-price" id="pd-price"></p>
+                <button type="button" id="pd-heart" class="heart-btn" onclick="toggleWishlist(pdProduct && pdProduct.id, event)" title="Save to wishlist">♡</button>
                 <div id="pd-sizes-wrap">
                     <label>Select Size</label>
                     <div id="pd-sizes" class="size-buttons"></div>
@@ -117,6 +139,10 @@
                 </button>
                 <p class="pd-share-hint">🔗 Share this item: <span id="pd-link" class="pd-link"></span></p>
             </div>
+        </div>
+        <div class="pd-reviews-wrap">
+            <h3>Customer Reviews</h3>
+            <div id="pd-reviews"></div>
         </div>
         <div class="pd-related-wrap">
             <h3>You May Also Like</h3>
@@ -183,6 +209,14 @@
                         </label>
                     </div>
                 </div>
+                <div class="form-group">
+                    <label>Promo Code</label>
+                    <div class="promo-row">
+                        <input type="text" id="promo-input" placeholder="e.g. FREETOWN10">
+                        <button type="button" onclick="applyPromo()">Apply</button>
+                    </div>
+                    <small id="promo-msg" style="display:none; margin-top:6px;"></small>
+                </div>
                 <button type="submit" class="checkout-btn" style="width:100%; margin-top:10px;">Place Order</button>
                 <button type="button" class="whatsapp-order-btn" onclick="orderViaWhatsApp()">
                     <span style="font-size:18px;">🟢</span> Order via WhatsApp instead
@@ -193,6 +227,19 @@
     <div id="checkout-overlay" class="cart-overlay" onclick="hideCheckoutForm()"></div>
 
     <div id="cart-overlay" class="cart-overlay" onclick="toggleCart()"></div>
+
+    <!-- Wishlist Sidebar -->
+    <div id="wishlist-panel" class="wishlist-panel">
+        <div class="cart-header">
+            <h3>♥ Your Wishlist</h3>
+            <button onclick="toggleWishlistPanel()" class="close-btn">&times;</button>
+        </div>
+        <div id="wishlist-items" class="cart-items"></div>
+    </div>
+    <div id="wishlist-overlay" class="cart-overlay" onclick="toggleWishlistPanel()"></div>
+
+    <!-- Floating WhatsApp Button -->
+    <a href="https://wa.me/23233600560?text=Hello%20Empire%20Fashion%20House!" target="_blank" class="wa-float" title="Chat with us on WhatsApp">💬</a>
 
     <script src="js/script.js"></script>
 </body>

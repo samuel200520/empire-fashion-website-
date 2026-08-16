@@ -81,6 +81,21 @@ async function initDb() {
             username TEXT NOT NULL,
             password_hash TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS reviews (
+            id SERIAL PRIMARY KEY,
+            product_id INT NOT NULL,
+            name TEXT NOT NULL,
+            rating INT NOT NULL,
+            comment TEXT NOT NULL,
+            approved BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS promos (
+            code TEXT PRIMARY KEY,
+            percent INT NOT NULL,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
     `);
 
     // Migration: add sizes/stock to products created before this feature.
@@ -89,6 +104,8 @@ async function initDb() {
         ALTER TABLE products ADD COLUMN IF NOT EXISTS sizes TEXT NOT NULL DEFAULT '';
         ALTER TABLE products ADD COLUMN IF NOT EXISTS colors TEXT NOT NULL DEFAULT '';
         ALTER TABLE products ADD COLUMN IF NOT EXISTS stock INT;
+        ALTER TABLE products ADD COLUMN IF NOT EXISTS images TEXT;
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code TEXT NOT NULL DEFAULT '';
         UPDATE products SET stock = NULL WHERE stock = 0 AND sizes = '';
     `);
 
@@ -127,12 +144,20 @@ async function initDb() {
 }
 
 // ---- Row mappers (keep the same JSON shape the frontend already uses) ----
+function parseImages(raw) {
+    try {
+        const arr = JSON.parse(raw || '[]');
+        return Array.isArray(arr) ? arr.filter(i => typeof i === 'string').slice(0, 4) : [];
+    } catch (e) { return []; }
+}
 function mapProduct(r) {
     return {
         id: r.id, name: r.name, price: Number(r.price), category: r.category, image: r.image,
         sizes: String(r.sizes || '').split(',').map(s => s.trim()).filter(Boolean),
         colors: String(r.colors || '').split(',').map(c => c.trim()).filter(Boolean),
-        stock: r.stock === null || r.stock === undefined ? null : Number(r.stock)
+        stock: r.stock === null || r.stock === undefined ? null : Number(r.stock),
+        images: parseImages(r.images),
+        created: r.created || null
     };
 }
 function normList(list) {
@@ -143,6 +168,16 @@ function normStock(stock) {
     if (stock === '' || stock === null || stock === undefined) return null;
     const n = parseInt(stock, 10);
     return Number.isFinite(n) ? Math.max(0, n) : null;
+}
+function normImages(images) {
+    if (!Array.isArray(images)) return null; // leave unchanged
+    return JSON.stringify(images.filter(i => typeof i === 'string' && i.length > 10).slice(0, 4));
+}
+async function validatePromo(code) {
+    if (!code) return null;
+    const r = await pool.query('SELECT code, percent FROM promos WHERE UPPER(code) = UPPER($1) AND active = TRUE',
+        [String(code).slice(0, 30)]);
+    return r.rows[0] || null;
 }
 function itemsSummary(items) {
     return items.map(i => {
@@ -163,7 +198,7 @@ function mapOrder(r) {
         id: r.id, customer: r.customer, email: r.email, phone: r.phone, address: r.address,
         product: r.product, items: r.items || [], amount: Number(r.amount),
         paymentMethod: r.payment_method, paymentRef: r.payment_ref, monimeSessionId: r.monime_session_id,
-        status: r.status, date: r.date
+        promoCode: r.promo_code || '', status: r.status, date: r.date
     };
 }
 
@@ -222,24 +257,31 @@ function requireAdmin(req, res, next) {
 
 // ---- Public API ----
 app.get('/api/products', async (req, res) => {
-    const r = await pool.query('SELECT * FROM products ORDER BY id');
+    const r = await pool.query(`SELECT *, to_char(created_at, 'YYYY-MM-DD') AS created FROM products ORDER BY id DESC`);
     res.json(r.rows.map(mapProduct));
 });
 
 app.post('/api/orders', async (req, res) => {
-    const { customer, email, phone, address, items, amount, paymentMethod, paymentRef } = req.body || {};
-    if (!customer || !Array.isArray(items) || items.length === 0 || !amount) {
+    const { customer, email, phone, address, items, paymentMethod, paymentRef, promoCode } = req.body || {};
+    if (!customer || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ error: 'Missing order details' });
     }
     const method = ['cod'].includes(paymentMethod) ? paymentMethod : 'cod';
     try {
+        // Totals are computed server-side — never trust the client amount
+        const subtotal = items.reduce((s, i) => s + (Number(i.price) || 0), 0);
+        const promo = await validatePromo(promoCode);
+        const discount = promo ? Math.round(subtotal * promo.percent) / 100 : 0;
+        const amount = Math.max(0, Math.round((subtotal - discount) * 100) / 100);
+
         const r = await pool.query(
-            `INSERT INTO orders (customer, email, phone, address, product, items, amount, payment_method, payment_ref, status)
-             VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, 'Pending')
+            `INSERT INTO orders (customer, email, phone, address, product, items, amount, payment_method, payment_ref, promo_code, status)
+             VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, 'Pending')
              RETURNING *, to_char(created_at, 'YYYY-MM-DD') AS date`,
             [String(customer).slice(0, 100), String(email || '').slice(0, 100), String(phone || '').slice(0, 30),
              String(address || '').slice(0, 200), itemsSummary(items),
-             JSON.stringify(items), Number(amount), method, paymentRef ? String(paymentRef).slice(0, 50) : '']);
+             JSON.stringify(items), amount, method, paymentRef ? String(paymentRef).slice(0, 50) : '',
+             promo ? promo.code : '']);
         const order = mapOrder(r.rows[0]);
 
         await applyStock(items);
@@ -285,13 +327,16 @@ app.patch('/api/orders/:id', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/products', requireAdmin, async (req, res) => {
-    const { name, price, image, category, sizes, colors, stock } = req.body || {};
+    const { name, price, image, category, sizes, colors, stock, images } = req.body || {};
     if (!name || !price || !image) return res.status(400).json({ error: 'Missing product fields' });
     try {
+        const imgJson = normImages(images) || '[]';
         const r = await pool.query(
-            'INSERT INTO products (name, price, category, image, sizes, colors, stock) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+            `INSERT INTO products (name, price, category, image, sizes, colors, stock, images)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             RETURNING *, to_char(created_at, 'YYYY-MM-DD') AS created`,
             [String(name).slice(0, 100), Number(price), String(category || '').toLowerCase().slice(0, 30), image,
-             normList(sizes), normList(colors), normStock(stock)]);
+             normList(sizes), normList(colors), normStock(stock), imgJson]);
         res.status(201).json(mapProduct(r.rows[0]));
     } catch (e) {
         console.error('Create product error:', e.message);
@@ -302,7 +347,7 @@ app.post('/api/products', requireAdmin, async (req, res) => {
 app.patch('/api/products/:id', requireAdmin, async (req, res) => {
     try {
         const id = Number(req.params.id);
-        const { name, price, image, category, sizes, colors, stock } = req.body || {};
+        const { name, price, image, category, sizes, colors, stock, images } = req.body || {};
         const r = await pool.query('SELECT * FROM products WHERE id = $1', [id]);
         if (r.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
         const p = r.rows[0];
@@ -313,11 +358,13 @@ app.patch('/api/products/:id', requireAdmin, async (req, res) => {
             category: category !== undefined ? String(category).toLowerCase().slice(0, 30) : p.category,
             sizes: sizes !== undefined ? normList(sizes) : p.sizes,
             colors: colors !== undefined ? normList(colors) : p.colors,
-            stock: stock !== undefined ? normStock(stock) : (p.stock ?? null)
+            stock: stock !== undefined ? normStock(stock) : (p.stock ?? null),
+            images: normImages(images) || (p.images || '[]')
         };
         const u = await pool.query(
-            'UPDATE products SET name = $1, price = $2, image = $3, category = $4, sizes = $5, colors = $6, stock = $7 WHERE id = $8 RETURNING *',
-            [merged.name, merged.price, merged.image, merged.category, merged.sizes, merged.colors, merged.stock, id]);
+            `UPDATE products SET name = $1, price = $2, image = $3, category = $4, sizes = $5, colors = $6, stock = $7, images = $8
+             WHERE id = $9 RETURNING *, to_char(created_at, 'YYYY-MM-DD') AS created`,
+            [merged.name, merged.price, merged.image, merged.category, merged.sizes, merged.colors, merged.stock, merged.images, id]);
         res.json(mapProduct(u.rows[0]));
     } catch (e) {
         console.error('Update product error:', e.message);
@@ -365,6 +412,110 @@ app.get('/api/track', async (req, res) => {
     }
 });
 
+// ---- Reviews ----
+// Public: approved reviews + average for one product
+app.get('/api/products/:id/reviews', async (req, res) => {
+    try {
+        const pid = Number(req.params.id);
+        const r = await pool.query(
+            `SELECT id, name, rating, comment, to_char(created_at, 'YYYY-MM-DD') AS date
+             FROM reviews WHERE product_id = $1 AND approved = TRUE ORDER BY created_at DESC LIMIT 50`, [pid]);
+        const avg = r.rows.length
+            ? Math.round(r.rows.reduce((s, v) => s + v.rating, 0) / r.rows.length * 10) / 10
+            : 0;
+        res.json({ avg, count: r.rows.length, reviews: r.rows });
+    } catch (e) {
+        console.error('Reviews fetch error:', e.message);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Public: submit a review (held for admin approval)
+app.post('/api/products/:id/reviews', async (req, res) => {
+    try {
+        const pid = Number(req.params.id);
+        const { name, rating, comment } = req.body || {};
+        const stars = parseInt(rating, 10);
+        if (!name || !comment || !Number.isInteger(stars) || stars < 1 || stars > 5) {
+            return res.status(400).json({ error: 'Please add your name, a 1-5 star rating, and a comment.' });
+        }
+        await pool.query('INSERT INTO reviews (product_id, name, rating, comment) VALUES ($1, $2, $3, $4)',
+            [pid, String(name).slice(0, 60), stars, String(comment).slice(0, 500)]);
+        res.status(201).json({ ok: true });
+    } catch (e) {
+        console.error('Review submit error:', e.message);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Admin: all reviews, approve, delete
+app.get('/api/reviews', requireAdmin, async (req, res) => {
+    const r = await pool.query(
+        `SELECT r.id, r.product_id, r.name, r.rating, r.comment, r.approved, to_char(r.created_at, 'YYYY-MM-DD') AS date,
+                p.name AS product_name
+         FROM reviews r LEFT JOIN products p ON p.id = r.product_id
+         ORDER BY r.approved ASC, r.created_at DESC LIMIT 200`);
+    res.json(r.rows);
+});
+
+app.patch('/api/reviews/:id', requireAdmin, async (req, res) => {
+    const r = await pool.query('UPDATE reviews SET approved = $1 WHERE id = $2 RETURNING id',
+        [!!req.body.approved, Number(req.params.id)]);
+    if (r.rowCount === 0) return res.status(404).json({ error: 'Review not found' });
+    res.json({ ok: true });
+});
+
+app.delete('/api/reviews/:id', requireAdmin, async (req, res) => {
+    await pool.query('DELETE FROM reviews WHERE id = $1', [Number(req.params.id)]);
+    res.json({ ok: true });
+});
+
+// ---- Promo codes ----
+// Public: check a code and preview the discount
+app.post('/api/promo/validate', async (req, res) => {
+    const { code, amount } = req.body || {};
+    const promo = await validatePromo(code);
+    if (!promo) return res.status(404).json({ valid: false, error: 'That promo code is not valid.' });
+    const subtotal = Number(amount) || 0;
+    const discount = Math.round(subtotal * promo.percent) / 100;
+    res.json({ valid: true, code: promo.code, percent: promo.percent, discount: Math.round(discount * 100) / 100, total: Math.max(0, Math.round((subtotal - discount) * 100) / 100) });
+});
+
+// Admin: manage promos
+app.get('/api/promos', requireAdmin, async (req, res) => {
+    const r = await pool.query('SELECT code, percent, active, to_char(created_at, \'YYYY-MM-DD\') AS date FROM promos ORDER BY created_at DESC');
+    res.json(r.rows.map(p => ({ code: p.code, percent: Number(p.percent), active: p.active, date: p.date })));
+});
+
+app.post('/api/promos', requireAdmin, async (req, res) => {
+    const { code, percent } = req.body || {};
+    const clean = String(code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+    const pct = parseInt(percent, 10);
+    if (!clean || !Number.isInteger(pct) || pct < 1 || pct > 90) {
+        return res.status(400).json({ error: 'Enter a code and a discount between 1 and 90 percent.' });
+    }
+    try {
+        await pool.query('INSERT INTO promos (code, percent) VALUES ($1, $2) ON CONFLICT (code) DO UPDATE SET percent = $2, active = TRUE',
+            [clean, pct]);
+        res.status(201).json({ ok: true, code: clean, percent: pct });
+    } catch (e) {
+        console.error('Promo create error:', e.message);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.patch('/api/promos/:code', requireAdmin, async (req, res) => {
+    const r = await pool.query('UPDATE promos SET active = $1 WHERE code = $2',
+        [!!req.body.active, String(req.params.code).toUpperCase()]);
+    if (r.rowCount === 0) return res.status(404).json({ error: 'Promo not found' });
+    res.json({ ok: true });
+});
+
+app.delete('/api/promos/:code', requireAdmin, async (req, res) => {
+    await pool.query('DELETE FROM promos WHERE code = $1', [String(req.params.code).toUpperCase()]);
+    res.json({ ok: true });
+});
+
 // ---- Monime Payment Gateway ----
 const MONIME_TOKEN = process.env.MONIME_TOKEN || '';
 const MONIME_SPACE = process.env.MONIME_SPACE || '';
@@ -390,8 +541,8 @@ app.post('/api/checkout/monime', async (req, res) => {
         return res.status(500).json({ error: 'Monime not configured. Set MONIME_TOKEN and MONIME_SPACE environment variables.' });
     }
 
-    const { customer, email, phone, address, items, amount } = req.body || {};
-    if (!customer || !Array.isArray(items) || items.length === 0 || !amount) {
+    const { customer, email, phone, address, items, promoCode } = req.body || {};
+    if (!customer || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ error: 'Missing order details' });
     }
 
@@ -399,14 +550,20 @@ app.post('/api/checkout/monime', async (req, res) => {
     const idempotencyKey = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${Math.random().toString(36).slice(2, 8)}-${Math.random().toString(36).slice(2, 8)}`;
 
     try {
+        // Totals computed server-side
+        const subtotal = items.reduce((s, i) => s + (Number(i.price) || 0), 0);
+        const promo = await validatePromo(promoCode);
+        const discount = promo ? Math.round(subtotal * promo.percent) / 100 : 0;
+        const amount = Math.max(0, Math.round((subtotal - discount) * 100) / 100);
+
         // 1. Create the order locally first (status: Pending)
         const ins = await pool.query(
-            `INSERT INTO orders (customer, email, phone, address, product, items, amount, payment_method, payment_ref, monime_session_id, status)
-             VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, 'monime', '', '', 'Pending')
+            `INSERT INTO orders (customer, email, phone, address, product, items, amount, payment_method, payment_ref, monime_session_id, promo_code, status)
+             VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, 'monime', '', '', $8, 'Pending')
              RETURNING id`,
             [String(customer).slice(0, 100), String(email || '').slice(0, 100), String(phone || '').slice(0, 30),
              String(address || '').slice(0, 200), itemsSummary(items),
-             JSON.stringify(items), Number(amount)]);
+             JSON.stringify(items), amount, promo ? promo.code : '']);
         const orderId = ins.rows[0].id;
 
         await applyStock(items);
@@ -414,24 +571,31 @@ app.post('/api/checkout/monime', async (req, res) => {
         await pool.query(
             `INSERT INTO customers (name, email, spent) VALUES ($1, $2, $3)
              ON CONFLICT (name) DO UPDATE SET spent = customers.spent + EXCLUDED.spent`,
-            [String(customer).slice(0, 100), String(email || '').slice(0, 100) || 'unknown@example.com', Number(amount)]);
+            [String(customer).slice(0, 100), String(email || '').slice(0, 100) || 'unknown@example.com', amount]);
 
         // 2. Call Monime to create a hosted checkout session
         // Amounts in minor units: SLE 25 = value 2500
+        // With a promo, charge one line for the discounted total; otherwise per item
+        const lineItems = promo
+            ? [{
+                type: 'custom',
+                name: `Empire Order #EMP${orderId}${promo ? ` (promo ${promo.code} -${promo.percent}%)` : ''}`,
+                price: { currency: 'SLE', value: Math.round(amount * 100) },
+                quantity: 1
+            }]
+            : items.map(i => ({
+                type: 'custom',
+                name: i.name,
+                price: { currency: 'SLE', value: Math.round(Number(i.price) * 100) },
+                quantity: 1
+            }));
+
         const sessionBody = {
             name: `Empire Fashion House - Order #EMP${orderId}`,
             successUrl: `${origin}/checkout-success.html?order_id=${orderId}`,
             cancelUrl: `${origin}/checkout-cancel.html?order_id=${orderId}`,
             callbackState: `${orderId}`,
-            lineItems: items.map(i => ({
-                type: 'custom',
-                name: i.name,
-                price: {
-                    currency: 'SLE',
-                    value: Math.round(Number(i.price) * 100)
-                },
-                quantity: 1
-            }))
+            lineItems
         };
 
         const monimeRes = await fetch(`${MONIME_API}/v1/checkout-sessions`, {

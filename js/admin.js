@@ -3,6 +3,8 @@ const API_URL = "";
 let allOrders = [];
 let allProducts = [];
 let allCustomers = [];
+let allReviews = [];
+let allPromos = [];
 let searchTerm = "";
 
 // ---- Helpers ----
@@ -109,14 +111,18 @@ async function fetchJson(url) {
 
 async function loadAllData() {
     try {
-        const [orders, customers, products] = await Promise.all([
+        const [orders, customers, products, reviews, promos] = await Promise.all([
             fetchJson(`${API_URL}/api/orders`),
             fetchJson(`${API_URL}/api/customers`),
-            fetchJson(`${API_URL}/api/products`)
+            fetchJson(`${API_URL}/api/products`),
+            fetchJson(`${API_URL}/api/reviews`),
+            fetchJson(`${API_URL}/api/promos`)
         ]);
         allOrders = orders.sort((a, b) => new Date(b.date) - new Date(a.date));
         allCustomers = customers;
         allProducts = products;
+        allReviews = reviews;
+        allPromos = promos;
     } catch (error) {
         console.error("Failed to fetch data:", error);
         showToast("Error connecting to database.");
@@ -126,6 +132,8 @@ async function loadAllData() {
     renderOrders();
     renderInventory();
     renderCustomers();
+    renderReviews();
+    renderPromos();
     updateBadges();
     initCharts();
 }
@@ -187,6 +195,47 @@ function renderDashboard() {
             </tr>
         `).join('');
     }
+
+    renderLowStock();
+    renderBestSellers();
+}
+
+function renderLowStock() {
+    const el = document.getElementById('lowstock-list');
+    if (!el) return;
+    const low = allProducts.filter(p => p.stock !== null && p.stock !== undefined && p.stock <= 3);
+    const countEl = document.getElementById('lowstock-count');
+    if (countEl) countEl.innerText = low.length;
+    if (low.length === 0) {
+        el.innerHTML = '<p style="color:var(--text-muted);">All stocked up 👍 (or stock not tracked)</p>';
+        return;
+    }
+    el.innerHTML = low.slice(0, 6).map(p => `
+        <div class="mini-list-row">
+            <img src="${esc(p.image)}" alt="">
+            <span class="mini-name">${esc(p.name)}</span>
+            <span class="${p.stock === 0 ? 'stock-out' : 'stock-low'}">${p.stock === 0 ? 'OUT OF STOCK' : p.stock + ' left'}</span>
+        </div>
+    `).join('');
+}
+
+function renderBestSellers() {
+    const el = document.getElementById('bestsellers-list');
+    if (!el) return;
+    const tally = {};
+    allOrders.forEach(o => orderItems(o).forEach(name => { tally[name] = (tally[name] || 0) + 1; }));
+    const top = Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    if (top.length === 0) {
+        el.innerHTML = '<p style="color:var(--text-muted);">No sales yet.</p>';
+        return;
+    }
+    el.innerHTML = top.map(([name, qty], i) => `
+        <div class="mini-list-row">
+            <span class="rank">${i + 1}</span>
+            <span class="mini-name">${esc(name)}</span>
+            <span class="qty">${qty} sold</span>
+        </div>
+    `).join('');
 }
 
 // ---- 7. Orders ----
@@ -226,7 +275,8 @@ function renderOrders() {
                 <td>${o.date ? new Date(o.date).toLocaleDateString() : '--'}</td>
                 <td><span class="status-badge status-${String(o.status).toLowerCase()}">${esc(o.status)}</span></td>
                 <td>${contactBtn}</td>
-                <td>
+                <td style="white-space:nowrap;">
+                    <button onclick="viewOrder(${o.id})" class="icon-btn" title="View / Receipt"><i class="fas fa-receipt"></i></button>
                     <select onchange="updateOrderStatus(${o.id}, this.value)" class="chart-filter" style="padding: 5px;">
                         ${['Pending', 'Paid', 'Processing', 'Shipped', 'Delivered', 'Cancelled'].map(s =>
                             `<option value="${s}" ${o.status === s ? 'selected' : ''}>${s}</option>`
@@ -257,6 +307,86 @@ async function updateOrderStatus(orderId, newStatus) {
         console.error("Error updating order:", error);
         showToast("Failed to update order status.");
     }
+}
+
+// ---- 7b. Order detail / receipt ----
+function groupedItems(o) {
+    const out = [];
+    if (Array.isArray(o.items) && o.items.length > 0) {
+        const map = new Map();
+        o.items.forEach(i => {
+            const k = `${i.name}|${i.size || ''}|${i.color || ''}`;
+            if (map.has(k)) map.get(k).qty++;
+            else map.set(k, { name: i.name, size: i.size || '', color: i.color || '', price: Number(i.price) || 0, qty: 1 });
+        });
+        map.forEach(v => out.push(v));
+    } else {
+        String(o.product || '').split(',').forEach(n => {
+            const t = n.trim();
+            if (t) out.push({ name: t, size: '', color: '', price: 0, qty: 1 });
+        });
+    }
+    return out;
+}
+
+function itemLabel(i) {
+    const parts = [i.size, i.color].filter(Boolean);
+    return i.name + (parts.length ? ` (${parts.join(', ')})` : '');
+}
+
+const PAYMENT_NAMES = { cod: 'Cash on Delivery', orange: 'Orange Money', afrimoney: 'Afrimoney', monime: 'Monime (Card/MoMo/Bank)' };
+
+function receiptText(o) {
+    const items = groupedItems(o);
+    const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
+    const promoLine = o.promoCode ? `\nPromo ${o.promoCode}: -NLE ${(subtotal - o.amount).toFixed(2)}` : '';
+    let text = `*EMPIRE FASHION HOUSE* 👑\nReceipt — Order #EMP${o.id}\nDate: ${o.date || ''}\n\nCustomer: ${o.customer}\n\n*Items:*\n`;
+    items.forEach(i => { text += `• ${itemLabel(i)}${i.qty > 1 ? ` x${i.qty}` : ''} — NLE ${(i.price * i.qty).toFixed(2)}\n`; });
+    text += `\nSubtotal: NLE ${subtotal.toFixed(2)}${promoLine}\n*Total: NLE ${(parseFloat(o.amount) || 0).toFixed(2)}*\nPayment: ${PAYMENT_NAMES[o.paymentMethod] || o.paymentMethod}${o.paymentRef ? ` (Ref: ${o.paymentRef})` : ''}\nStatus: ${o.status}\n\nThank you for shopping with Empire Fashion House!`;
+    return text;
+}
+
+function viewOrder(id) {
+    const o = allOrders.find(x => x.id === id);
+    if (!o) return;
+    const items = groupedItems(o);
+    const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
+    const link = waLink(o.phone, receiptText(o));
+
+    document.getElementById('order-modal-body').innerHTML = `
+        <div class="receipt">
+            <h2 style="text-align:center;">EMPIRE FASHION HOUSE</h2>
+            <p style="text-align:center; color:#777;">Order Receipt — #EMP${o.id}</p>
+            <div class="receipt-row"><span>Customer</span><strong>${esc(o.customer)}</strong></div>
+            <div class="receipt-row"><span>Phone</span><strong>${esc(o.phone || '--')}</strong></div>
+            <div class="receipt-row"><span>Email</span><strong>${esc(o.email || '--')}</strong></div>
+            <div class="receipt-row"><span>Address</span><strong>${esc(o.address || '--')}</strong></div>
+            <div class="receipt-row"><span>Date</span><strong>${o.date || '--'}</strong></div>
+            <div class="receipt-row"><span>Status</span><span class="status-badge status-${String(o.status).toLowerCase()}">${esc(o.status)}</span></div>
+            <div class="receipt-row"><span>Payment</span><strong>${PAYMENT_NAMES[o.paymentMethod] || esc(o.paymentMethod || '--')}${o.paymentRef ? `<br><small>Ref: ${esc(o.paymentRef)}</small>` : ''}</strong></div>
+            <h3 style="margin:18px 0 8px;">Items</h3>
+            ${items.map(i => `
+                <div class="receipt-row">
+                    <span>${esc(itemLabel(i))}${i.qty > 1 ? ` <strong>×${i.qty}</strong>` : ''}</span>
+                    <strong>NLE ${(i.price * i.qty).toFixed(2)}</strong>
+                </div>
+            `).join('')}
+            <div class="receipt-row" style="border-top:2px solid #111; margin-top:8px; padding-top:8px;"><span>Subtotal</span><strong>NLE ${subtotal.toFixed(2)}</strong></div>
+            ${o.promoCode ? `<div class="receipt-row" style="color:#28a745;"><span>Promo ${esc(o.promoCode)}</span><strong>-NLE ${(subtotal - parseFloat(o.amount)).toFixed(2)}</strong></div>` : ''}
+            <div class="receipt-row" style="font-size:18px;"><span><strong>TOTAL</strong></span><strong style="color:#b8941f;">NLE ${(parseFloat(o.amount) || 0).toFixed(2)}</strong></div>
+        </div>
+    `;
+    document.getElementById('order-modal-actions').innerHTML = `
+        <button class="btn-primary" onclick="window.print()">🖨 Print Receipt</button>
+        ${link ? `<a href="${link}" target="_blank" class="btn-primary" style="background:#25D366; text-decoration:none; display:inline-block;">🟢 Send on WhatsApp</a>` : ''}
+    `;
+    document.getElementById('order-modal').style.display = 'flex';
+    document.getElementById('order-modal-overlay').style.display = 'block';
+}
+
+function closeOrderModal() {
+    document.getElementById('order-modal').style.display = 'none';
+    document.getElementById('order-modal-overlay').style.display = 'none';
 }
 
 function exportOrdersCSV() {
@@ -425,7 +555,7 @@ function cancelEdit() {
     document.getElementById('cancel-edit-btn').style.display = 'none';
 }
 
-async function submitProduct(name, price, category, image) {
+async function submitProduct(name, price, category, image, images) {
     const editId = document.getElementById('product-edit-id').value;
     const sizes = document.getElementById('product-sizes').value;
     const colors = document.getElementById('product-colors').value;
@@ -433,6 +563,7 @@ async function submitProduct(name, price, category, image) {
     if (editId) {
         const body = { name, price, category, sizes, colors, stock };
         if (image) body.image = image;
+        if (images) body.images = images;
         const res = await fetch(`${API_URL}/api/products/${editId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -448,7 +579,7 @@ async function submitProduct(name, price, category, image) {
         const res = await fetch(`${API_URL}/api/products`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, price, category, image, sizes, colors, stock })
+            body: JSON.stringify({ name, price, category, image, sizes, colors, stock, images: images || [] })
         });
         if (!res.ok) throw new Error(await serverError(res));
         showToast('Product saved to database!');
@@ -492,16 +623,25 @@ async function handleProductSubmit(e) {
     const price = parseFloat(document.getElementById('product-price').value);
     const category = document.getElementById('product-category').value;
     const imageInput = document.getElementById('product-image');
+    const imagesInput = document.getElementById('product-images');
     const submitBtn = document.getElementById('product-submit-btn');
 
     let image = null;
+    let images = null;
     try {
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'Saving...';
         if (imageInput.files && imageInput.files[0]) {
-            submitBtn.disabled = true;
-            submitBtn.innerText = 'Saving...';
             image = await compressImage(imageInput.files[0]);
         }
-        await submitProduct(name, price, category, image);
+        // Extra gallery photos (up to 4), compressed smaller
+        if (imagesInput.files && imagesInput.files.length > 0) {
+            images = [];
+            for (const file of Array.from(imagesInput.files).slice(0, 4)) {
+                images.push(await compressImage(file, 700, 0.75));
+            }
+        }
+        await submitProduct(name, price, category, image, images);
     } catch (err) {
         console.error(err);
         showToast('Failed to save product: ' + err.message);
@@ -516,6 +656,133 @@ async function refreshProducts() {
         allProducts = await fetchJson(`${API_URL}/api/products`);
         renderInventory();
     } catch (e) { console.error(e); }
+}
+
+// ---- 9b. Reviews moderation ----
+function renderReviews() {
+    const tbody = document.getElementById('reviews-list');
+    if (!tbody) return;
+    const filtered = allReviews.filter(r => matchesSearch(r.name, r.comment, r.product_name));
+    const pending = allReviews.filter(r => !r.approved).length;
+    const hint = document.getElementById('reviews-pending-hint');
+    if (hint) hint.textContent = pending > 0 ? `${pending} waiting for approval` : '';
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No reviews yet.</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = filtered.map(r => `
+        <tr>
+            <td>${esc(r.product_name || '#' + r.product_id)}</td>
+            <td style="color:#D4AF37; white-space:nowrap;">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</td>
+            <td>${esc(r.name)}</td>
+            <td style="max-width:250px;">${esc(r.comment)}</td>
+            <td>${r.date || ''}</td>
+            <td>${r.approved
+                ? '<span class="status-badge status-delivered">Approved</span>'
+                : '<span class="status-badge status-pending">Pending</span>'}</td>
+            <td style="white-space:nowrap;">
+                <button onclick="approveReview(${r.id}, ${!r.approved})" class="btn-text" title="${r.approved ? 'Unapprove' : 'Approve'}">${r.approved ? 'Unapprove' : '✓ Approve'}</button>
+                <button onclick="deleteReview(${r.id})" class="icon-btn" style="color:var(--danger);" title="Delete"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function approveReview(id, approved) {
+    try {
+        const res = await fetch(`${API_URL}/api/reviews/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ approved })
+        });
+        if (!res.ok) throw new Error();
+        const r = allReviews.find(x => x.id === id);
+        if (r) r.approved = approved;
+        showToast(approved ? 'Review approved — now visible on the store.' : 'Review hidden.');
+        renderReviews();
+    } catch (e) { showToast('Failed to update review.'); }
+}
+
+async function deleteReview(id) {
+    if (!confirm('Delete this review permanently?')) return;
+    try {
+        const res = await fetch(`${API_URL}/api/reviews/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error();
+        allReviews = allReviews.filter(r => r.id !== id);
+        showToast('Review deleted.');
+        renderReviews();
+    } catch (e) { showToast('Failed to delete review.'); }
+}
+
+// ---- 9c. Promo codes ----
+function renderPromos() {
+    const tbody = document.getElementById('promos-list');
+    if (!tbody) return;
+    if (allPromos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No promo codes yet — create one above!</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = allPromos.map(p => `
+        <tr>
+            <td><strong style="font-size:15px;">${esc(p.code)}</strong></td>
+            <td>${p.percent}% off</td>
+            <td>${p.date || ''}</td>
+            <td>${p.active
+                ? '<span class="status-badge status-delivered">Active</span>'
+                : '<span class="status-badge status-cancelled">Paused</span>'}</td>
+            <td style="white-space:nowrap;">
+                <button onclick="togglePromo('${esc(p.code)}', ${!p.active})" class="btn-text">${p.active ? 'Pause' : 'Activate'}</button>
+                <button onclick="deletePromo('${esc(p.code)}')" class="icon-btn" style="color:var(--danger);" title="Delete"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function handlePromoSubmit(e) {
+    e.preventDefault();
+    const code = document.getElementById('promo-code').value.trim();
+    const percent = document.getElementById('promo-percent').value;
+    if (!code || !percent) { showToast('Enter a code and a percentage.'); return; }
+    try {
+        const res = await fetch(`${API_URL}/api/promos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code, percent })
+        });
+        const data = await res.json();
+        if (!res.ok) { showToast(data.error || 'Failed to create promo.'); return; }
+        showToast(`Promo ${data.code} created (${data.percent}% off)!`);
+        document.getElementById('promo-form').reset();
+        allPromos = await fetchJson(`${API_URL}/api/promos`);
+        renderPromos();
+    } catch (e) { showToast('Failed to create promo.'); }
+}
+
+async function togglePromo(code, active) {
+    try {
+        const res = await fetch(`${API_URL}/api/promos/${code}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ active })
+        });
+        if (!res.ok) throw new Error();
+        const p = allPromos.find(x => x.code === code);
+        if (p) p.active = active;
+        showToast(active ? `${code} activated.` : `${code} paused.`);
+        renderPromos();
+    } catch (e) { showToast('Failed to update promo.'); }
+}
+
+async function deletePromo(code) {
+    if (!confirm(`Delete promo ${code}?`)) return;
+    try {
+        const res = await fetch(`${API_URL}/api/promos/${code}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error();
+        allPromos = allPromos.filter(p => p.code !== code);
+        showToast('Promo deleted.');
+        renderPromos();
+    } catch (e) { showToast('Failed to delete promo.'); }
 }
 
 async function deleteProduct(id) {
@@ -681,6 +948,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const productForm = document.getElementById('product-form');
     if (productForm) productForm.addEventListener('submit', handleProductSubmit);
+
+    const promoForm = document.getElementById('promo-form');
+    if (promoForm) promoForm.addEventListener('submit', handlePromoSubmit);
 
     const passwordForm = document.getElementById('password-form');
     if (passwordForm) passwordForm.addEventListener('submit', handlePasswordSubmit);
