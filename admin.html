@@ -209,6 +209,14 @@
                             </select>
                         </div>
                         <div class="form-group">
+                            <label>Sizes (comma separated — leave empty if one size fits all)</label>
+                            <input type="text" id="product-sizes" placeholder="e.g. S, M, L, XL  or  40, 41, 42, 43">
+                        </div>
+                        <div class="form-group">
+                            <label>Stock Quantity (leave empty = unlimited)</label>
+                            <input type="number" id="product-stock" min="0" placeholder="e.g. 10">
+                        </div>
+                        <div class="form-group">
                             <label>Product Image</label>
                             <input type="file" id="product-image" accept="image/*">
                             <small id="image-hint" style="color:var(--text-muted);"></small>
@@ -227,7 +235,7 @@
                     <div class="table-responsive">
                         <table class="data-table">
                             <thead>
-                                <tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Actions</th></tr>
+                                <tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Sizes</th><th>Stock</th><th>Actions</th></tr>
                             </thead>
                             <tbody id="inventory-list"></tbody>
                         </table>

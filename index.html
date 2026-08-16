@@ -92,6 +92,33 @@
         </div>
     </footer>
 
+    <!-- Product Detail Modal -->
+    <div id="pd-overlay" class="cart-overlay" onclick="closeProduct()"></div>
+    <div id="product-modal" class="product-modal">
+        <div class="product-detail">
+            <button class="close-btn pd-close" onclick="closeProduct()">&times;</button>
+            <div class="pd-image"><img id="pd-image" src="" alt=""></div>
+            <div class="pd-info">
+                <h2 id="pd-name"></h2>
+                <p class="pd-price" id="pd-price"></p>
+                <div id="pd-sizes-wrap">
+                    <label>Select Size</label>
+                    <div id="pd-sizes" class="size-buttons"></div>
+                </div>
+                <p id="pd-stock"></p>
+                <button type="button" id="pd-add" class="checkout-btn" onclick="pdAddToCart()">Add to Cart</button>
+                <button type="button" class="whatsapp-order-btn" onclick="askViaWhatsApp()">
+                    <span style="font-size:18px;">🟢</span> Ask on WhatsApp
+                </button>
+                <p class="pd-share-hint">🔗 Share this item: <span id="pd-link" class="pd-link"></span></p>
+            </div>
+        </div>
+        <div class="pd-related-wrap">
+            <h3>You May Also Like</h3>
+            <div id="pd-related" class="pd-related"></div>
+        </div>
+    </div>
+
     <!-- Shopping Cart Sidebar -->
     <div id="cart-sidebar" class="cart-sidebar">
         <div class="cart-header">

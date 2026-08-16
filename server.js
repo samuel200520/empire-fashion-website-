@@ -83,6 +83,14 @@ async function initDb() {
         );
     `);
 
+    // Migration: add sizes/stock to products created before this feature.
+    // stock NULL means unlimited (legacy products keep selling).
+    await pool.query(`
+        ALTER TABLE products ADD COLUMN IF NOT EXISTS sizes TEXT NOT NULL DEFAULT '';
+        ALTER TABLE products ADD COLUMN IF NOT EXISTS stock INT;
+        UPDATE products SET stock = NULL WHERE stock = 0 AND sizes = '';
+    `);
+
     const adminCount = await pool.query('SELECT COUNT(*)::int AS n FROM admin');
     if (adminCount.rows[0].n === 0) {
         await pool.query('INSERT INTO admin (id, username, password_hash) VALUES (1, $1, $2)',
@@ -119,7 +127,31 @@ async function initDb() {
 
 // ---- Row mappers (keep the same JSON shape the frontend already uses) ----
 function mapProduct(r) {
-    return { id: r.id, name: r.name, price: Number(r.price), category: r.category, image: r.image };
+    return {
+        id: r.id, name: r.name, price: Number(r.price), category: r.category, image: r.image,
+        sizes: String(r.sizes || '').split(',').map(s => s.trim()).filter(Boolean),
+        stock: r.stock === null || r.stock === undefined ? null : Number(r.stock)
+    };
+}
+function normSizes(sizes) {
+    const arr = Array.isArray(sizes) ? sizes : String(sizes || '').split(',');
+    return arr.map(s => String(s).trim()).filter(Boolean).join(',');
+}
+function normStock(stock) {
+    if (stock === '' || stock === null || stock === undefined) return null;
+    const n = parseInt(stock, 10);
+    return Number.isFinite(n) ? Math.max(0, n) : null;
+}
+function itemsSummary(items) {
+    return items.map(i => i.name + (i.size ? ` (${i.size})` : '')).join(', ');
+}
+async function applyStock(items) {
+    for (const i of items) {
+        const pid = Number(i.id);
+        if (pid) {
+            await pool.query('UPDATE products SET stock = GREATEST(stock - 1, 0) WHERE id = $1 AND stock IS NOT NULL', [pid]);
+        }
+    }
 }
 function mapOrder(r) {
     return {
@@ -201,10 +233,11 @@ app.post('/api/orders', async (req, res) => {
              VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, 'Pending')
              RETURNING *, to_char(created_at, 'YYYY-MM-DD') AS date`,
             [String(customer).slice(0, 100), String(email || '').slice(0, 100), String(phone || '').slice(0, 30),
-             String(address || '').slice(0, 200), items.map(i => i.name).join(', '),
+             String(address || '').slice(0, 200), itemsSummary(items),
              JSON.stringify(items), Number(amount), method, paymentRef ? String(paymentRef).slice(0, 50) : '']);
         const order = mapOrder(r.rows[0]);
 
+        await applyStock(items);
         await pool.query(
             `INSERT INTO customers (name, email, spent) VALUES ($1, $2, $3)
              ON CONFLICT (name) DO UPDATE SET spent = customers.spent + EXCLUDED.spent`,
@@ -247,12 +280,13 @@ app.patch('/api/orders/:id', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/products', requireAdmin, async (req, res) => {
-    const { name, price, image, category } = req.body || {};
+    const { name, price, image, category, sizes, stock } = req.body || {};
     if (!name || !price || !image) return res.status(400).json({ error: 'Missing product fields' });
     try {
         const r = await pool.query(
-            'INSERT INTO products (name, price, category, image) VALUES ($1, $2, $3, $4) RETURNING *',
-            [String(name).slice(0, 100), Number(price), String(category || '').toLowerCase().slice(0, 30), image]);
+            'INSERT INTO products (name, price, category, image, sizes, stock) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [String(name).slice(0, 100), Number(price), String(category || '').toLowerCase().slice(0, 30), image,
+             normSizes(sizes), normStock(stock)]);
         res.status(201).json(mapProduct(r.rows[0]));
     } catch (e) {
         console.error('Create product error:', e.message);
@@ -263,7 +297,7 @@ app.post('/api/products', requireAdmin, async (req, res) => {
 app.patch('/api/products/:id', requireAdmin, async (req, res) => {
     try {
         const id = Number(req.params.id);
-        const { name, price, image, category } = req.body || {};
+        const { name, price, image, category, sizes, stock } = req.body || {};
         const r = await pool.query('SELECT * FROM products WHERE id = $1', [id]);
         if (r.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
         const p = r.rows[0];
@@ -271,11 +305,13 @@ app.patch('/api/products/:id', requireAdmin, async (req, res) => {
             name: name !== undefined ? String(name).slice(0, 100) : p.name,
             price: price !== undefined ? Number(price) : Number(p.price),
             image: image !== undefined ? image : p.image,
-            category: category !== undefined ? String(category).toLowerCase().slice(0, 30) : p.category
+            category: category !== undefined ? String(category).toLowerCase().slice(0, 30) : p.category,
+            sizes: sizes !== undefined ? normSizes(sizes) : p.sizes,
+            stock: stock !== undefined ? normStock(stock) : (p.stock ?? null)
         };
         const u = await pool.query(
-            'UPDATE products SET name = $1, price = $2, image = $3, category = $4 WHERE id = $5 RETURNING *',
-            [merged.name, merged.price, merged.image, merged.category, id]);
+            'UPDATE products SET name = $1, price = $2, image = $3, category = $4, sizes = $5, stock = $6 WHERE id = $7 RETURNING *',
+            [merged.name, merged.price, merged.image, merged.category, merged.sizes, merged.stock, id]);
         res.json(mapProduct(u.rows[0]));
     } catch (e) {
         console.error('Update product error:', e.message);
@@ -329,9 +365,11 @@ app.post('/api/checkout/monime', async (req, res) => {
              VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, 'monime', '', '', 'Pending')
              RETURNING id`,
             [String(customer).slice(0, 100), String(email || '').slice(0, 100), String(phone || '').slice(0, 30),
-             String(address || '').slice(0, 200), items.map(i => i.name).join(', '),
+             String(address || '').slice(0, 200), itemsSummary(items),
              JSON.stringify(items), Number(amount)]);
         const orderId = ins.rows[0].id;
+
+        await applyStock(items);
 
         await pool.query(
             `INSERT INTO customers (name, email, spent) VALUES ($1, $2, $3)

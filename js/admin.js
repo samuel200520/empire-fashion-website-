@@ -364,16 +364,22 @@ function renderInventory() {
     tableBody.innerHTML = '';
 
     if (filtered.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No products found.</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No products found.</td></tr>`;
         return;
     }
     filtered.forEach(product => {
+        const sizes = product.sizes || [];
+        const stockCell = product.stock === null || product.stock === undefined
+            ? '<span title="Unlimited">∞</span>'
+            : `<span class="${product.stock === 0 ? 'stock-out' : product.stock <= 3 ? 'stock-low' : ''}">${product.stock}</span>`;
         tableBody.innerHTML += `
             <tr>
                 <td><img src="${esc(product.image)}" alt="${esc(product.name)}"></td>
                 <td>${esc(product.name)}</td>
                 <td><span class="cat-badge">${esc(product.category || 'uncategorized')}</span></td>
                 <td>NLE ${(parseFloat(product.price) || 0).toLocaleString()}</td>
+                <td>${sizes.length > 0 ? sizes.map(s => `<span class="cat-badge">${esc(s)}</span>`).join(' ') : '--'}</td>
+                <td>${stockCell}</td>
                 <td>
                     <button onclick="startEditProduct(${product.id})" class="icon-btn" title="Edit"><i class="fas fa-pen"></i></button>
                     <button onclick="deleteProduct(${product.id})" class="icon-btn" style="color: var(--danger);" title="Delete"><i class="fas fa-trash"></i></button>
@@ -392,6 +398,8 @@ function startEditProduct(id) {
     document.getElementById('product-name').value = product.name;
     document.getElementById('product-price').value = product.price;
     document.getElementById('product-category').value = product.category || 'men';
+    document.getElementById('product-sizes').value = (product.sizes || []).join(', ');
+    document.getElementById('product-stock').value = product.stock ?? '';
     document.getElementById('image-hint').innerText = 'Leave empty to keep the current image.';
     document.getElementById('product-submit-btn').innerText = 'Update Product';
     document.getElementById('cancel-edit-btn').style.display = 'inline-block';
@@ -410,8 +418,10 @@ function cancelEdit() {
 
 async function submitProduct(name, price, category, image) {
     const editId = document.getElementById('product-edit-id').value;
+    const sizes = document.getElementById('product-sizes').value;
+    const stock = document.getElementById('product-stock').value;
     if (editId) {
-        const body = { name, price, category };
+        const body = { name, price, category, sizes, stock };
         if (image) body.image = image;
         const res = await fetch(`${API_URL}/api/products/${editId}`, {
             method: 'PATCH',
@@ -428,7 +438,7 @@ async function submitProduct(name, price, category, image) {
         const res = await fetch(`${API_URL}/api/products`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, price, category, image })
+            body: JSON.stringify({ name, price, category, image, sizes, stock })
         });
         if (!res.ok) throw new Error(await serverError(res));
         showToast('Product saved to database!');

@@ -12,7 +12,8 @@ function saveCart() {
 }
 function loadCart() {
     try {
-        cart = JSON.parse(localStorage.getItem('empire_cart') || '[]');
+        cart = (JSON.parse(localStorage.getItem('empire_cart') || '[]') || [])
+            .map(i => ({ id: i.id, name: i.name, price: i.price, image: i.image, size: i.size || '' }));
     } catch (e) {
         cart = [];
     }
@@ -26,6 +27,24 @@ function esc(str) {
 }
 
 // 1. Load Storefront Products
+function productCardHTML(product) {
+    const index = storeProducts.indexOf(product);
+    const soldOut = product.stock !== null && product.stock <= 0;
+    return `
+        <div class="product-card">
+            <div class="product-image" onclick="openProduct(${product.id})">
+                <img src="${esc(product.image)}" alt="${esc(product.name)}">
+                ${soldOut ? '<span class="soldout-badge">SOLD OUT</span>' : ''}
+            </div>
+            <h3 class="product-title" onclick="openProduct(${product.id})">${esc(product.name)}</h3>
+            <p class="price">NLE ${esc(product.price)}</p>
+            <button class="add-to-cart" onclick="quickAdd(${index})" ${soldOut ? 'disabled' : ''}>
+                ${soldOut ? 'Sold Out' : 'Add to Cart'}
+            </button>
+        </div>
+    `;
+}
+
 async function loadStorefront() {
     try {
         const response = await fetch(`${API_URL}/api/products`);
@@ -43,29 +62,46 @@ async function loadStorefront() {
             return;
         }
 
-        storeProducts.forEach((product, index) => {
-            const card = document.createElement('div');
-            card.classList.add('product-card');
-            card.innerHTML = `
-                <div class="product-image">
-                    <img src="${esc(product.image)}" alt="${esc(product.name)}">
-                </div>
-                <h3>${esc(product.name)}</h3>
-                <p class="price">NLE ${esc(product.price)}</p>
-                <button class="add-to-cart" onclick="addToCart(${index})">Add to Cart</button>
-            `;
-            grid.appendChild(card);
+        storeProducts.forEach((product) => {
+            grid.innerHTML += productCardHTML(product);
         });
+
+        // Deep link support: site.com/#product=3 opens that product
+        const m = location.hash.match(/^#product=(\d+)/);
+        if (m) renderProduct(m[1]);
     } catch (error) {
         console.error("Error fetching products:", error);
     }
 }
 
 // 2. Cart Functions
-function addToCart(index) {
-    cart.push(storeProducts[index]);
+function countInCart(productId) {
+    return cart.filter(i => i.id === productId).length;
+}
+
+function addProductToCart(product, size) {
+    if (product.stock !== null && product.stock !== undefined && countInCart(product.id) >= product.stock) {
+        alert(`Sorry, only ${product.stock} left in stock for this item.`);
+        return false;
+    }
+    cart.push({ id: product.id, name: product.name, price: product.price, image: product.image, size: size || '' });
     updateCartUI();
-    toggleCart();
+    return true;
+}
+
+// "Add to Cart" on the grid card: items with sizes open the detail page first
+function quickAdd(index) {
+    const p = storeProducts[index];
+    if (!p) return;
+    if ((p.sizes || []).length > 0) {
+        openProduct(p.id);
+        return;
+    }
+    if (p.stock !== null && p.stock !== undefined && p.stock <= 0) {
+        alert('Sorry, this item is sold out.');
+        return;
+    }
+    if (addProductToCart(p, '')) toggleCart();
 }
 
 function removeFromCart(cartIndex) {
@@ -88,7 +124,7 @@ function updateCartUI() {
                 <div class="cart-item">
                     <img src="${esc(item.image)}" alt="${esc(item.name)}">
                     <div class="cart-item-details">
-                        <h4>${esc(item.name)}</h4>
+                        <h4>${esc(item.name)}${item.size ? `<span class="cart-size">${esc(item.size)}</span>` : ''}</h4>
                         <p>NLE ${esc(item.price)}</p>
                         <button class="remove-btn" onclick="removeFromCart(${index})">Remove</button>
                     </div>
@@ -149,7 +185,9 @@ function orderViaWhatsApp() {
     const total = cart.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
 
     let msg = `Hello Empire Fashion House! I want to place an order:\n\n`;
-    cart.forEach(item => { msg += `• ${item.name} - NLE ${item.price}\n`; });
+    cart.forEach(item => {
+        msg += `• ${item.name}${item.size ? ` (Size ${item.size})` : ''} - NLE ${item.price}\n`;
+    });
     msg += `\nTotal: NLE ${total.toFixed(2)}`;
     if (name) msg += `\n\nName: ${name}`;
     if (phone) msg += `\nPhone: ${phone}`;
@@ -193,22 +231,120 @@ function filterByCategory(category) {
     }
 
     filtered.forEach((product) => {
-        const index = storeProducts.indexOf(product);
-        const card = document.createElement('div');
-        card.classList.add('product-card');
-        card.innerHTML = `
-            <div class="product-image">
-                <img src="${esc(product.image)}" alt="${esc(product.name)}">
-            </div>
-            <h3>${esc(product.name)}</h3>
-            <p class="price">NLE ${esc(product.price)}</p>
-            <button class="add-to-cart" onclick="addToCart(${index})">Add to Cart</button>
-        `;
-        grid.appendChild(card);
+        grid.innerHTML += productCardHTML(product);
     });
 
     // Close mobile nav after click
     document.getElementById('mobile-nav').style.display = 'none';
+}
+
+// 7. Product Detail Modal (shareable link: #product=ID)
+let pdProduct = null;
+let pdSelectedSize = '';
+
+window.addEventListener('hashchange', () => {
+    const m = location.hash.match(/^#product=(\d+)/);
+    if (m) renderProduct(m[1]);
+    else hideProductModal();
+});
+
+function openProduct(id) {
+    location.hash = 'product=' + id; // hashchange listener renders it
+}
+
+function renderProduct(id) {
+    const p = storeProducts.find(x => x.id === Number(id));
+    if (!p) { hideProductModal(); return; }
+    pdProduct = p;
+    pdSelectedSize = '';
+
+    document.getElementById('pd-image').src = p.image;
+    document.getElementById('pd-image').alt = p.name;
+    document.getElementById('pd-name').innerText = p.name;
+    document.getElementById('pd-price').innerText = 'NLE ' + p.price;
+    document.getElementById('pd-link').innerText = location.origin + '/#product=' + p.id;
+
+    // Size picker
+    const wrap = document.getElementById('pd-sizes-wrap');
+    const box = document.getElementById('pd-sizes');
+    const sizes = p.sizes || [];
+    if (sizes.length > 0) {
+        wrap.style.display = 'block';
+        box.innerHTML = sizes.map(s => {
+            const safe = String(s).replace(/'/g, "\\'");
+            return `<button type="button" class="size-btn" onclick="selectSize(this, '${safe}')">${esc(s)}</button>`;
+        }).join('');
+    } else {
+        wrap.style.display = 'none';
+        box.innerHTML = '';
+    }
+
+    // Stock line + Add button state
+    const stEl = document.getElementById('pd-stock');
+    const addBtn = document.getElementById('pd-add');
+    const soldOut = p.stock !== null && p.stock !== undefined && p.stock <= 0;
+    if (p.stock === null || p.stock === undefined) {
+        stEl.innerText = '';
+    } else if (soldOut) {
+        stEl.innerHTML = '<span style="color:#dc3545; font-weight:bold;">Out of stock</span>';
+    } else {
+        stEl.innerHTML = `<span style="color:#28a745;">✔ ${p.stock} in stock</span>`;
+    }
+    addBtn.disabled = soldOut;
+    addBtn.innerText = soldOut ? 'Sold Out' : 'Add to Cart';
+
+    // Related items: same category first, fallback to anything else
+    const relEl = document.getElementById('pd-related');
+    let rel = storeProducts.filter(x => x.id !== p.id && (x.category || '') === (p.category || '')).slice(0, 4);
+    if (rel.length === 0) rel = storeProducts.filter(x => x.id !== p.id).slice(0, 4);
+    relEl.innerHTML = rel.map(x => `
+        <div class="rel-card" onclick="openProduct(${x.id})">
+            <img src="${esc(x.image)}" alt="${esc(x.name)}">
+            <p>${esc(x.name)}</p>
+            <span>NLE ${esc(x.price)}</span>
+        </div>
+    `).join('');
+
+    document.getElementById('product-modal').style.display = 'block';
+    document.getElementById('pd-overlay').style.display = 'block';
+    document.body.style.overflow = 'hidden';
+    window.scrollTo(0, 0);
+}
+
+function selectSize(btn, size) {
+    document.querySelectorAll('#pd-sizes .size-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    pdSelectedSize = size;
+}
+
+function hideProductModal() {
+    document.getElementById('product-modal').style.display = 'none';
+    document.getElementById('pd-overlay').style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+function closeProduct() {
+    history.replaceState(null, '', location.pathname + location.search);
+    hideProductModal();
+}
+
+function pdAddToCart() {
+    if (!pdProduct) return;
+    if ((pdProduct.sizes || []).length > 0 && !pdSelectedSize) {
+        alert('Please select a size first.');
+        return;
+    }
+    if (addProductToCart(pdProduct, pdSelectedSize)) {
+        closeProduct();
+        toggleCart();
+    }
+}
+
+function askViaWhatsApp() {
+    if (!pdProduct) return;
+    const sizeNote = pdSelectedSize ? ` (size ${pdSelectedSize})` : '';
+    const msg = `Hello Empire Fashion House! I'm interested in the ${pdProduct.name}${sizeNote} (NLE ${pdProduct.price}). Is it available?`;
+    window.open(`https://wa.me/${STORE_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 // Wire up all category links (desktop nav + mobile nav + footer)
@@ -250,7 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         email,
                         phone,
                         address,
-                        items: cart.map(i => ({ name: i.name, price: i.price })),
+                        items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, size: i.size || '' })),
                         amount
                     })
                 });
@@ -274,7 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     email,
                     phone,
                     address,
-                    items: cart.map(i => ({ name: i.name, price: i.price })),
+                    items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, size: i.size || '' })),
                     amount,
                     paymentMethod: 'cod'
                 })
