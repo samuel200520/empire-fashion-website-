@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
+const pgSession = require('connect-pg-simple')(session);
 
 // Load .env for local development (Render sets real env vars instead)
 const envFile = path.join(__dirname, '.env');
@@ -36,8 +37,13 @@ const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 app.use(express.json({ limit: '15mb' }));
 app.use(express.static(__dirname));
 
-// ---- Session/auth setup ----
+// ---- Session/auth setup (sessions live in PostgreSQL, survive server restarts) ----
 app.use(session({
+    store: new pgSession({
+        pool,
+        tableName: 'admin_sessions',
+        pruneSessionInterval: 60 * 60 // clean expired rows hourly
+    }),
     secret: process.env.SESSION_SECRET || 'empire-fashion-dev-secret-change-me',
     resave: false,
     saveUninitialized: false,
@@ -96,6 +102,12 @@ async function initDb() {
             active BOOLEAN NOT NULL DEFAULT TRUE,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+        CREATE TABLE IF NOT EXISTS admin_sessions (
+            sid varchar NOT NULL PRIMARY KEY,
+            sess json NOT NULL,
+            expire timestamp(6) NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_admin_sessions_expire ON admin_sessions (expire);
     `);
 
     // Migration: add sizes/stock to products created before this feature.
