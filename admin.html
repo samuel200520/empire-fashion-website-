@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Empire Admin - Dashboard</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
+    <script src="js/vendor/chart.umd.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="light-mode">
@@ -47,7 +47,7 @@
                         <span class="notif-badge" id="notif-badge"></span>
                     </button>
                     <div class="profile-dropdown">
-                        <img src="https://ui-avatars.com/api/?background=111111&color=D4AF37&name=Ezekiel" alt="Admin">
+                        <img src="assets/images/logo.jpeg" alt="Admin" style="border-radius:50%; object-fit:cover;">
                         <div class="profile-info">
                             <span class="name">Ezekiel</span>
                             <span class="role">Super Admin</span>
@@ -166,6 +166,7 @@
                         <select id="order-status-filter" class="chart-filter" onchange="renderOrders()">
                             <option value="All">All Statuses</option>
                             <option value="Pending">Pending</option>
+                            <option value="Paid">Paid</option>
                             <option value="Processing">Processing</option>
                             <option value="Shipped">Shipped</option>
                             <option value="Delivered">Delivered</option>
@@ -343,15 +344,15 @@
                     <form id="password-form" class="admin-form">
                         <div class="form-group">
                             <label>Current Password</label>
-                            <input type="password" id="current-password" required>
+                            <input type="password" id="current-password" autocomplete="current-password" required>
                         </div>
                         <div class="form-group">
                             <label>New Password (min 6 characters)</label>
-                            <input type="password" id="new-password" minlength="6" required>
+                            <input type="password" id="new-password" autocomplete="new-password" minlength="6" required>
                         </div>
                         <div class="form-group">
                             <label>Confirm New Password</label>
-                            <input type="password" id="confirm-password" minlength="6" required>
+                            <input type="password" id="confirm-password" autocomplete="new-password" minlength="6" required>
                         </div>
                         <button type="submit" class="btn-primary">Update Password</button>
                     </form>

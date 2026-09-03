@@ -430,6 +430,19 @@ let revenueChart = null;
 let categoryChart = null;
 
 async function initCharts() {
+    // Defence in depth: if the chart library failed to load, show a friendly note
+    // instead of throwing and leaving blank cards.
+    if (typeof Chart === 'undefined') {
+        ['revenueChart', 'categoryChart'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                const wrap = el.closest('.chart-card');
+                if (wrap) wrap.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px 10px;">📊 Charts unavailable.</p>';
+            }
+        });
+        return;
+    }
+    try {
     // Revenue line - last 7 days real data
     let labels = [], data = [];
     let today = new Date();
@@ -493,6 +506,9 @@ async function initCharts() {
                 options: { responsive: true, maintainAspectRatio: false }
             });
         }
+    }
+    } catch (e) {
+        console.error('Chart render failed:', e);
     }
 }
 
