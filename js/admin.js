@@ -77,8 +77,16 @@ function logout() {
 
 // ---- 2. UI Toggles ----
 function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('collapsed');
-    localStorage.setItem('sidebar_collapsed', document.getElementById('sidebar').classList.contains('collapsed'));
+    const side = document.getElementById('sidebar');
+    // On mobile the sidebar is an off-canvas drawer that slides in/out
+    if (window.innerWidth <= 768) {
+        const open = side.classList.toggle('open');
+        const backdrop = document.getElementById('sidebar-backdrop');
+        if (backdrop) backdrop.classList.toggle('show', open);
+        return;
+    }
+    side.classList.toggle('collapsed');
+    localStorage.setItem('sidebar_collapsed', side.classList.contains('collapsed'));
 }
 function toggleTheme() {
     document.body.classList.toggle('dark-mode');
@@ -91,6 +99,12 @@ function toggleTheme() {
 
 // ---- 3. SPA View Switcher ----
 function switchView(viewName, event) {
+    // On mobile, close the off-canvas sidebar once a view is chosen
+    if (window.innerWidth <= 768) {
+        document.getElementById('sidebar').classList.remove('open');
+        const backdrop = document.getElementById('sidebar-backdrop');
+        if (backdrop) backdrop.classList.remove('show');
+    }
     document.querySelectorAll('.content-view').forEach(v => v.classList.remove('active'));
     document.getElementById('view-' + viewName).classList.add('active');
 
@@ -148,7 +162,6 @@ async function loadAllData() {
     renderReviews();
     renderPromos();
     updateBadges();
-    initCharts();
 }
 
 function updateBadges() {
@@ -423,101 +436,6 @@ function exportOrdersCSV() {
     a.click();
     URL.revokeObjectURL(a.href);
     showToast('Orders exported to CSV.');
-}
-
-// ---- 8. Charts ----
-let revenueChart = null;
-let categoryChart = null;
-
-async function initCharts() {
-    // Defence in depth: if the chart library failed to load, show a friendly note
-    // instead of throwing and leaving blank cards.
-    if (typeof Chart === 'undefined') {
-        ['revenueChart', 'categoryChart'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                const wrap = el.closest('.chart-card');
-                if (wrap) wrap.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px 10px;">📊 Charts unavailable.</p>';
-            }
-        });
-        return;
-    }
-    try {
-    // Revenue line - last 7 days real data
-    let labels = [], data = [];
-    let today = new Date();
-    for (let i = 6; i >= 0; i--) {
-        let day = new Date(today);
-        day.setDate(today.getDate() - i);
-        const dateString = day.toISOString().split('T')[0];
-        labels.push(day.toLocaleDateString('en-US', { weekday: 'short' }));
-        data.push(allOrders.filter(o => o.date === dateString).reduce((s, o) => s + (parseFloat(o.amount) || 0), 0));
-    }
-
-    const revCtx = document.getElementById('revenueChart');
-    if (revCtx) {
-        if (revenueChart) revenueChart.destroy();
-        revenueChart = new Chart(revCtx, {
-            type: 'line',
-            data: {
-                labels,
-                datasets: [{
-                    label: 'Revenue (NLE)',
-                    data,
-                    borderColor: '#D4AF37',
-                    backgroundColor: 'rgba(212, 175, 55, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
-            },
-            options: { responsive: true, maintainAspectRatio: false }
-        });
-    }
-
-    // Category doughnut - real data from orders
-    const catTotals = {};
-    allOrders.forEach(o => {
-        const parts = orderItems(o);
-        if (parts.length === 0) return;
-        parts.forEach(p => {
-            const cat = guessCategory(p.trim());
-            catTotals[cat] = (catTotals[cat] || 0) + (parseFloat(o.amount) || 0) / parts.length;
-        });
-    });
-
-    const catCtx = document.getElementById('categoryChart');
-    if (catCtx) {
-        if (categoryChart) categoryChart.destroy();
-        const entries = Object.entries(catTotals);
-        if (entries.length === 0) {
-            categoryChart = new Chart(catCtx, {
-                type: 'doughnut',
-                data: { labels: ['No sales yet'], datasets: [{ data: [1], backgroundColor: ['#e0e0e0'] }] },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
-        } else {
-            const colors = ['#111111', '#D4AF37', '#333333', '#b8941f', '#888888', '#555555'];
-            categoryChart = new Chart(catCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: entries.map(e => e[0]),
-                    datasets: [{ data: entries.map(e => e[1]), backgroundColor: colors.slice(0, entries.length) }]
-                },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
-        }
-    }
-    } catch (e) {
-        console.error('Chart render failed:', e);
-    }
-}
-
-function guessCategory(name) {
-    const n = String(name || '').toLowerCase();
-    if (/shoe|sneaker|boot|trainer|sandal|air force|jordan|nike/.test(n)) return 'Shoes';
-    if (/bag|purse|wallet|backpack/.test(n)) return 'Bags';
-    if (/watch|clock|sunglass|cap|hat|belt/.test(n)) return 'Accessories';
-    return 'Clothes';
 }
 
 // ---- 9. Products ----

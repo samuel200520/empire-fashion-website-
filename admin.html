@@ -5,12 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Empire Admin - Dashboard</title>
     <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
-    <script src="js/vendor/chart.umd.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="light-mode">
 
     <div class="app-wrapper">
+        <!-- Mobile sidebar backdrop -->
+        <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="toggleSidebar()"></div>
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
@@ -98,21 +99,6 @@
                             <p class="number" id="kpi-products">0</p>
                             <span class="trend down" id="kpi-trend-products"><i class="fas fa-arrow-down"></i> --</span>
                         </div>
-                    </div>
-                </div>
-
-                <div class="charts-grid">
-                    <div class="chart-card large">
-                        <div class="chart-header">
-                            <h3>Revenue - Last 7 Days</h3>
-                        </div>
-                        <canvas id="revenueChart"></canvas>
-                    </div>
-                    <div class="chart-card">
-                        <div class="chart-header">
-                            <h3>Sales by Category</h3>
-                        </div>
-                        <canvas id="categoryChart"></canvas>
                     </div>
                 </div>
 

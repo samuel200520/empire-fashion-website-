@@ -356,6 +356,13 @@ function hideCheckoutForm() {
     document.getElementById('checkout-overlay').style.display = 'none';
 }
 
+// Back to the cart from the checkout screen (keeps the cart contents intact)
+function backToCart() {
+    hideCheckoutForm();
+    document.getElementById('cart-sidebar').classList.add('open');
+    document.getElementById('cart-overlay').classList.add('active');
+}
+
 // Order via WhatsApp: send cart to the store's WhatsApp and let them confirm manually
 function orderViaWhatsApp() {
     if (cart.length === 0) {

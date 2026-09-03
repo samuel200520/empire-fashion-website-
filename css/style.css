@@ -157,14 +157,54 @@ a { text-decoration: none; color: inherit; }
 .toast { position: fixed; bottom: 20px; right: 20px; background: var(--primary-black); color: var(--primary-gold); padding: 15px 25px; border-radius: 5px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); opacity: 0; transform: translateY(20px); transition: 0.3s; z-index: 1000; }
 .toast.show { opacity: 1; transform: translateY(0); }
 
-/* Mobile Responsive */
+/* Mobile Responsive (off-canvas admin drawer) */
 @media (max-width: 768px) {
-    .sidebar { width: 80px; }
-    .sidebar .sidebar-title, .sidebar .nav-item span { display: none; }
-    .main-content { margin-left: 80px; }
-    .charts-grid { grid-template-columns: 1fr; }
-    .search-bar input { width: 150px; }
+    .app-wrapper { display: block; }
+    .sidebar {
+        width: 270px;
+        transform: translateX(-105%);
+        box-shadow: 4px 0 20px rgba(0,0,0,0.3);
+        transition: transform 0.3s ease;
+        z-index: 1100;
+    }
+    .sidebar.open { transform: translateX(0); }
+    /* Neutralize the desktop collapsed/icon-rail state on mobile */
+    .sidebar.collapsed { width: 270px; }
+    .sidebar.collapsed .sidebar-title,
+    .sidebar.collapsed .nav-item span { display: block; }
+    .sidebar.collapsed .sidebar-header { justify-content: flex-start; }
+    .sidebar.collapsed + .main-content { margin-left: 0; }
+    .main-content { margin-left: 0; min-width: 0; }
+    .topbar { padding: 0 12px; height: 60px; }
+    .topbar-left, .topbar-right { gap: 8px; }
+    .search-bar { flex: 1 1 auto; min-width: 0; }
+    .search-bar input { width: 100%; min-width: 0; }
     .profile-info { display: none; }
+    .content-view { padding: 16px 12px; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; margin-bottom: 20px; }
+    .page-header h1 { font-size: 22px; }
+    .stats-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+    .stat-card { gap: 12px; padding: 14px; }
+    .stat-icon { width: 44px; height: 44px; font-size: 18px; }
+    .charts-grid { grid-template-columns: 1fr !important; gap: 14px; }
+    .data-card, .chart-card { padding: 14px; }
+    .table-responsive { -webkit-overflow-scrolling: touch; }
+    .data-table { min-width: 700px; }
+    .data-table th, .data-table td { padding: 10px; }
+    .admin-form { max-width: 100%; }
+    .nav-item { padding: 13px 20px; }
+    .notif-badge { top: 4px; right: 4px; }
+}
+/* Mobile sidebar backdrop */
+.sidebar-backdrop { display: none; }
+@media (max-width: 768px) {
+    .sidebar-backdrop.show {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.55);
+        z-index: 1090;
+    }
 }
 /* =========================================
    STOREFRONT UI (Black & Gold Theme)
@@ -521,6 +561,21 @@ body.dark-mode .cat-badge { color: var(--primary-gold); }
     transition: 0.3s;
 }
 .whatsapp-order-btn:hover { background-color: #1ebe57; }
+
+/* Back to cart button (checkout modal) */
+.checkout-back-btn {
+    background: none;
+    border: none;
+    color: #b8941f;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0 0 12px;
+    display: inline-block;
+    text-align: left;
+    transition: color 0.2s;
+}
+.checkout-back-btn:hover { color: #8a6d13; }
 
 /* Payment method selection (checkout modal) */
 .payment-options { display: flex; flex-direction: column; gap: 8px; }
