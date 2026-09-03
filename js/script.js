@@ -439,8 +439,14 @@ function renderProduct(id) {
     document.getElementById('pd-price').innerText = 'NLE ' + p.price;
     document.getElementById('pd-link').innerText = location.origin + '/#product=' + p.id;
 
-    // Photo gallery: main image + extra shots
-    const gallery = [p.image, ...(p.images || [])];
+    // Photo gallery: main image + per-color photos + extra shots
+    const colorPhotos = Object.values(p.colorImages || {});
+    const seen = new Set();
+    const gallery = [p.image, ...colorPhotos, ...(p.images || [])].filter(src => {
+        if (!src || seen.has(src)) return false;
+        seen.add(src);
+        return true;
+    });
     const thumbsEl = document.getElementById('pd-thumbs');
     if (gallery.length > 1) {
         thumbsEl.style.display = 'flex';
@@ -610,6 +616,22 @@ function selectColor(btn, color) {
     document.querySelectorAll('#pd-colors .color-btn').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
     pdSelectedColor = color;
+    // If the admin uploaded a per-color photo, swap the main image and refresh the gallery
+    if (!pdProduct) return;
+    const ci = pdProduct.colorImages || {};
+    const colorPhoto = ci[color] || ci[color.toLowerCase()];
+    if (!colorPhoto) return;
+    document.getElementById('pd-image').src = colorPhoto;
+    document.querySelectorAll('#pd-thumbs .pd-thumb').forEach(t => t.classList.remove('active'));
+    // Rebuild the thumbs so the chosen color photo is included and active
+    const gallery = [colorPhoto, pdProduct.image, ...(pdProduct.images || []).filter(s => s !== colorPhoto)];
+    const thumbsEl = document.getElementById('pd-thumbs');
+    if (gallery.length > 1) {
+        thumbsEl.style.display = 'flex';
+        thumbsEl.innerHTML = gallery.map((src, i) =>
+            `<img src="${esc(src)}" class="pd-thumb ${i === 0 ? 'active' : ''}" onclick="swapPdImage(this, '${esc(src).replace(/'/g, '%27')}')" alt="Photo ${i + 1}" onerror="this.onerror=null;this.src='${IMG_FALLBACK}';">`
+        ).join('');
+    }
 }
 
 function hideProductModal() {

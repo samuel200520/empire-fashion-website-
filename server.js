@@ -176,6 +176,7 @@ async function initDb() {
         ALTER TABLE products ADD COLUMN IF NOT EXISTS colors TEXT NOT NULL DEFAULT '';
         ALTER TABLE products ADD COLUMN IF NOT EXISTS stock INT;
         ALTER TABLE products ADD COLUMN IF NOT EXISTS images TEXT;
+        ALTER TABLE products ADD COLUMN IF NOT EXISTS color_images TEXT DEFAULT '{}';
         ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code TEXT NOT NULL DEFAULT '';
         UPDATE products SET stock = NULL WHERE stock = 0 AND sizes = '';
     `);
@@ -221,6 +222,19 @@ function parseImages(raw) {
         return Array.isArray(arr) ? arr.filter(i => typeof i === 'string').slice(0, 4) : [];
     } catch (e) { return []; }
 }
+function parseColorImages(raw) {
+    try {
+        const o = JSON.parse(raw || '{}');
+        if (o && typeof o === 'object' && !Array.isArray(o)) {
+            const out = {};
+            Object.entries(o).forEach(([k, v]) => {
+                if (typeof v === 'string' && v.length > 10 && Object.keys(out).length < 12) out[k] = v;
+            });
+            return out;
+        }
+    } catch (e) { /* ignore bad JSON */ }
+    return {};
+}
 function mapProduct(r) {
     return {
         id: r.id, name: r.name, price: Number(r.price), category: r.category, image: r.image,
@@ -228,6 +242,7 @@ function mapProduct(r) {
         colors: String(r.colors || '').split(',').map(c => c.trim()).filter(Boolean),
         stock: r.stock === null || r.stock === undefined ? null : Number(r.stock),
         images: parseImages(r.images),
+        colorImages: parseColorImages(r.color_images),
         created: r.created || null
     };
 }
@@ -243,6 +258,10 @@ function normStock(stock) {
 function normImages(images) {
     if (!Array.isArray(images)) return null; // leave unchanged
     return JSON.stringify(images.filter(i => typeof i === 'string' && i.length > 10).slice(0, 4));
+}
+function normColorImages(obj) {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null; // leave unchanged
+    return JSON.stringify(parseColorImages(obj));
 }
 async function validatePromo(code) {
     if (!code) return null;
@@ -399,16 +418,17 @@ app.patch('/api/orders/:id', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/products', requireAdmin, async (req, res) => {
-    const { name, price, image, category, sizes, colors, stock, images } = req.body || {};
+    const { name, price, image, category, sizes, colors, stock, images, colorImages } = req.body || {};
     if (!name || !price || !image) return res.status(400).json({ error: 'Missing product fields' });
     try {
         const imgJson = normImages(images) || '[]';
+        const ciJson = normColorImages(colorImages) || '{}';
         const r = await pool.query(
-            `INSERT INTO products (name, price, category, image, sizes, colors, stock, images)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            `INSERT INTO products (name, price, category, image, sizes, colors, stock, images, color_images)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
              RETURNING *, to_char(created_at, 'YYYY-MM-DD') AS created`,
             [String(name).slice(0, 100), Number(price), String(category || '').toLowerCase().slice(0, 30), image,
-             normList(sizes), normList(colors), normStock(stock), imgJson]);
+             normList(sizes), normList(colors), normStock(stock), imgJson, ciJson]);
         res.status(201).json(mapProduct(r.rows[0]));
     } catch (e) {
         console.error('Create product error:', e.message);
@@ -419,10 +439,11 @@ app.post('/api/products', requireAdmin, async (req, res) => {
 app.patch('/api/products/:id', requireAdmin, async (req, res) => {
     try {
         const id = Number(req.params.id);
-        const { name, price, image, category, sizes, colors, stock, images } = req.body || {};
+        const { name, price, image, category, sizes, colors, stock, images, colorImages } = req.body || {};
         const r = await pool.query('SELECT * FROM products WHERE id = $1', [id]);
         if (r.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
         const p = r.rows[0];
+        const ciJson = normColorImages(colorImages);
         const merged = {
             name: name !== undefined ? String(name).slice(0, 100) : p.name,
             price: price !== undefined ? Number(price) : Number(p.price),
@@ -431,12 +452,13 @@ app.patch('/api/products/:id', requireAdmin, async (req, res) => {
             sizes: sizes !== undefined ? normList(sizes) : p.sizes,
             colors: colors !== undefined ? normList(colors) : p.colors,
             stock: stock !== undefined ? normStock(stock) : (p.stock ?? null),
-            images: normImages(images) || (p.images || '[]')
+            images: normImages(images) || (p.images || '[]'),
+            colorImages: ciJson !== null ? ciJson : (p.color_images || '{}')
         };
         const u = await pool.query(
-            `UPDATE products SET name = $1, price = $2, image = $3, category = $4, sizes = $5, colors = $6, stock = $7, images = $8
-             WHERE id = $9 RETURNING *, to_char(created_at, 'YYYY-MM-DD') AS created`,
-            [merged.name, merged.price, merged.image, merged.category, merged.sizes, merged.colors, merged.stock, merged.images, id]);
+            `UPDATE products SET name = $1, price = $2, image = $3, category = $4, sizes = $5, colors = $6, stock = $7, images = $8, color_images = $9
+             WHERE id = $10 RETURNING *, to_char(created_at, 'YYYY-MM-DD') AS created`,
+            [merged.name, merged.price, merged.image, merged.category, merged.sizes, merged.colors, merged.stock, merged.images, merged.colorImages, id]);
         res.json(mapProduct(u.rows[0]));
     } catch (e) {
         console.error('Update product error:', e.message);

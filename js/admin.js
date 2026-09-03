@@ -108,16 +108,22 @@ function switchView(viewName, event) {
     document.querySelectorAll('.content-view').forEach(v => v.classList.remove('active'));
     document.getElementById('view-' + viewName).classList.add('active');
 
-    document.querySelectorAll('.sidebar-nav .nav-item').forEach(nav => nav.classList.remove('active'));
-    if (event && event.currentTarget && event.currentTarget.closest('.sidebar-nav')) {
-        event.currentTarget.classList.add('active');
-    } else {
-        // Highlight nav item for programmatic switches (e.g. bell click)
+    // Highlight the active nav item in both the sidebar and the mobile bottom nav
+    const navItems = document.querySelectorAll('.sidebar-nav .nav-item');
+    const mnavItems = document.querySelectorAll('.mobile-bottom-nav .mnav-item');
+    const current = event && event.currentTarget;
+    if (current && (current.closest('.sidebar-nav') || current.closest('.mobile-bottom-nav'))) {
+        navItems.forEach(n => n.classList.remove('active'));
+        mnavItems.forEach(n => n.classList.remove('active'));
+        current.classList.add('active');
+        // Also mirror on the other nav
         const idx = { dashboard: 0, orders: 1, products: 2, customers: 3, settings: 4 }[viewName];
-        if (idx !== undefined) {
-            const items = document.querySelectorAll('.sidebar-nav .nav-item');
-            if (items[idx]) items[idx].classList.add('active');
-        }
+        if (current.closest('.sidebar-nav')) mnavItems[idx] && mnavItems[idx].classList.add('active');
+        if (current.closest('.mobile-bottom-nav')) navItems[idx] && navItems[idx].classList.add('active');
+    } else {
+        const idx = { dashboard: 0, orders: 1, products: 2, customers: 3, settings: 4 }[viewName];
+        navItems.forEach((n, i) => n.classList.toggle('active', i === idx));
+        mnavItems.forEach((n, i) => n.classList.toggle('active', i === idx));
     }
 }
 
@@ -167,8 +173,10 @@ async function loadAllData() {
 function updateBadges() {
     const pending = allOrders.filter(o => o.status === 'Pending').length;
     const ordersBadge = document.getElementById('orders-badge');
+    const mnavBadge = document.getElementById('mnav-orders-badge');
     const notifBadge = document.getElementById('notif-badge');
     if (ordersBadge) ordersBadge.textContent = pending > 0 ? pending : '';
+    if (mnavBadge) mnavBadge.textContent = pending > 0 ? pending : '';
     if (notifBadge) notifBadge.textContent = pending > 0 ? pending : '';
 }
 
@@ -487,6 +495,8 @@ function startEditProduct(id) {
     document.getElementById('product-colors').value = (product.colors || []).join(', ');
     document.getElementById('product-stock').value = product.stock ?? '';
     document.getElementById('image-hint').innerText = 'Leave empty to keep the current image.';
+    document.getElementById('color-images-hint').innerText = 'Leave empty to keep the current color photos.';
+    document.getElementById('color-images-hint').style.color = '';
     document.getElementById('product-submit-btn').innerText = 'Update Product';
     document.getElementById('cancel-edit-btn').style.display = 'inline-block';
 
@@ -498,11 +508,13 @@ function cancelEdit() {
     document.getElementById('product-form').reset();
     document.getElementById('product-edit-id').value = '';
     document.getElementById('image-hint').innerText = '';
+    document.getElementById('color-images-hint').innerText = 'e.g. Colors: Blue, Red, Black → pick the blue photo first, then red, then black.';
+    document.getElementById('color-images-hint').style.color = '';
     document.getElementById('product-submit-btn').innerText = 'Publish to Store';
     document.getElementById('cancel-edit-btn').style.display = 'none';
 }
 
-async function submitProduct(name, price, category, image, images) {
+async function submitProduct(name, price, category, image, images, colorImages) {
     const editId = document.getElementById('product-edit-id').value;
     const sizes = document.getElementById('product-sizes').value;
     const colors = document.getElementById('product-colors').value;
@@ -511,6 +523,7 @@ async function submitProduct(name, price, category, image, images) {
         const body = { name, price, category, sizes, colors, stock };
         if (image) body.image = image;
         if (images) body.images = images;
+        if (colorImages) body.colorImages = colorImages;
         const res = await fetch(`${API_URL}/api/products/${editId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -526,7 +539,7 @@ async function submitProduct(name, price, category, image, images) {
         const res = await fetch(`${API_URL}/api/products`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, price, category, image, sizes, colors, stock, images: images || [] })
+            body: JSON.stringify({ name, price, category, image, sizes, colors, stock, images: images || [], colorImages: colorImages || {} })
         });
         if (!res.ok) throw new Error(await serverError(res));
         showToast('Product saved to database!');
@@ -571,10 +584,12 @@ async function handleProductSubmit(e) {
     const category = document.getElementById('product-category').value;
     const imageInput = document.getElementById('product-image');
     const imagesInput = document.getElementById('product-images');
+    const colorImagesInput = document.getElementById('product-color-images');
     const submitBtn = document.getElementById('product-submit-btn');
 
     let image = null;
     let images = null;
+    let colorImages = null;
     try {
         submitBtn.disabled = true;
         submitBtn.innerText = 'Saving...';
@@ -588,7 +603,26 @@ async function handleProductSubmit(e) {
                 images.push(await compressImage(file, 700, 0.75));
             }
         }
-        await submitProduct(name, price, category, image, images);
+        // Color-specific photos: matched to the Colors field by order (Blue→1st, Red→2nd…)
+        if (colorImagesInput.files && colorImagesInput.files.length > 0) {
+            const colorList = document.getElementById('product-colors').value.split(',').map(c => c.trim()).filter(Boolean);
+            const files = Array.from(colorImagesInput.files).slice(0, colorList.length || 12);
+            const map = {};
+            for (let i = 0; i < files.length; i++) {
+                const key = colorList[i] ? colorList[i] : ('color-' + (i + 1));
+                map[key] = await compressImage(files[i], 700, 0.75);
+            }
+            if (colorList.length > 0 && files.length !== colorList.length) {
+                const hint = document.getElementById('color-images-hint');
+                if (hint) hint.style.color = '#dc3545';
+                showToast(`Note: you picked ${files.length} photo(s) for ${colorList.length} color(s) — match them 1-to-1.`);
+            } else {
+                const hint = document.getElementById('color-images-hint');
+                if (hint) hint.style.color = '#28a745';
+            }
+            colorImages = map;
+        }
+        await submitProduct(name, price, category, image, images, colorImages);
     } catch (err) {
         console.error(err);
         showToast('Failed to save product: ' + err.message);

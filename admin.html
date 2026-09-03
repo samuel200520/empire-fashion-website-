@@ -57,6 +57,15 @@
                 </div>
             </header>
 
+            <!-- Mobile bottom navigation (always visible on phones) -->
+            <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
+                <a href="#" class="mnav-item active" onclick="switchView('dashboard', event)"><i class="fas fa-home"></i><span>Dashboard</span></a>
+                <a href="#" class="mnav-item" onclick="switchView('orders', event)"><i class="fas fa-shopping-cart"></i><span>Orders</span><span class="nav-badge" id="mnav-orders-badge"></span></a>
+                <a href="#" class="mnav-item" onclick="switchView('products', event)"><i class="fas fa-box"></i><span>Products</span></a>
+                <a href="#" class="mnav-item" onclick="switchView('customers', event)"><i class="fas fa-users"></i><span>Customers</span></a>
+                <a href="#" class="mnav-item" onclick="switchView('settings', event)"><i class="fas fa-cog"></i><span>Settings</span></a>
+            </nav>
+
             <!-- Dashboard View -->
             <section id="view-dashboard" class="content-view active">
                 <div class="page-header">
@@ -222,6 +231,11 @@
                             <label>More Photos (up to 4 extra shots — optional)</label>
                             <input type="file" id="product-images" accept="image/*" multiple>
                             <small id="images-hint" style="color:var(--text-muted);"></small>
+                        </div>
+                        <div class="form-group">
+                            <label>Color Photos (optional — one photo per color, in the same order as the Colors field above)</label>
+                            <input type="file" id="product-color-images" accept="image/*" multiple>
+                            <small id="color-images-hint" style="color:var(--text-muted);">e.g. Colors: Blue, Red, Black → pick the blue photo first, then red, then black.</small>
                         </div>
                         <div class="form-group">
                             <label>Product Image</label>

@@ -86,6 +86,7 @@ a { text-decoration: none; color: inherit; }
     cursor: pointer; padding: 10px; border-radius: 50%; transition: 0.2s;
 }
 .icon-btn:hover { background: var(--bg-body); color: var(--text-main); }
+.topbar-left .icon-btn { color: var(--text-main); }
 
 .search-bar { background: var(--bg-body); border-radius: 20px; padding: 10px 20px; display: flex; align-items: center; gap: 10px; }
 .search-bar input { background: none; border: none; outline: none; color: var(--text-main); width: 250px; }
@@ -205,6 +206,45 @@ a { text-decoration: none; color: inherit; }
         background: rgba(0,0,0,0.55);
         z-index: 1090;
     }
+}
+
+/* =========================================
+   ADMIN: MOBILE BOTTOM NAV (visible on phones only)
+   ========================================= */
+.mobile-bottom-nav { display: none; }
+.mnav-item {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; flex: 1; padding: 6px 4px; min-width: 0;
+    color: var(--text-muted); font-size: 10px; font-weight: 600;
+    text-decoration: none; border-top: 2px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+    position: relative;
+}
+.mnav-item i { font-size: 18px; }
+.mnav-item span:not(.nav-badge) {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 100%;
+}
+.mnav-item.active { color: var(--primary-gold); border-top-color: var(--primary-gold); }
+.mnav-item:hover { color: var(--primary-gold); }
+.mnav-item .nav-badge {
+    position: absolute; top: 2px; right: calc(50% - 18px);
+    margin-left: 0;
+}
+
+@media (max-width: 768px) {
+    .mobile-bottom-nav {
+        display: flex;
+        position: fixed;
+        left: 0; right: 0; bottom: 0;
+        background: var(--bg-card);
+        border-top: 1px solid var(--border-color);
+        box-shadow: 0 -4px 15px rgba(0,0,0,0.08);
+        z-index: 95;
+        padding: 0;
+    }
+    /* Leave room at the bottom so content isn't hidden under the bar */
+    .main-content { padding-bottom: 70px; }
 }
 /* =========================================
    STOREFRONT UI (Black & Gold Theme)
