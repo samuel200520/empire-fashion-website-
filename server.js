@@ -228,7 +228,7 @@ function parseColorImages(raw) {
         if (o && typeof o === 'object' && !Array.isArray(o)) {
             const out = {};
             Object.entries(o).forEach(([k, v]) => {
-                if (typeof v === 'string' && v.length > 10 && Object.keys(out).length < 12) out[k] = v;
+                if (typeof v === 'string' && v.length > 10 && Object.keys(out).length < 20) out[k] = v;
             });
             return out;
         }

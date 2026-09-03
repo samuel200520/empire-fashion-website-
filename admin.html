@@ -220,22 +220,23 @@
                             <input type="text" id="product-sizes" placeholder="e.g. S, M, L, XL  or  40, 41, 42, 43">
                         </div>
                         <div class="form-group">
-                            <label>Colors (comma separated — leave empty if one color)</label>
-                            <input type="text" id="product-colors" placeholder="e.g. Black, White, Gold, Wine">
-                        </div>
-                        <div class="form-group">
                             <label>Stock Quantity (leave empty = unlimited)</label>
                             <input type="number" id="product-stock" min="0" placeholder="e.g. 10">
+                        </div>
+                        <div class="form-group">
+                            <label>Colors &amp; Photos <small style="color:var(--text-muted); font-weight:normal;">— add up to 20 colors, each with its own photo</small></label>
+                            <div id="color-rows"></div>
+                            <button type="button" class="btn-secondary" id="add-color-row-btn" onclick="addColorRow()" style="margin-top:10px;">
+                                <i class="fas fa-plus"></i> Add Color
+                            </button>
+                            <small id="color-images-hint" style="color:var(--text-muted); display:block; margin-top:8px;">
+                                Tap <strong>Add Color</strong> for each color you offer. Pick the color name and its photo in the same row. Customers will see the photo change when they click that color on the store.
+                            </small>
                         </div>
                         <div class="form-group">
                             <label>More Photos (up to 4 extra shots — optional)</label>
                             <input type="file" id="product-images" accept="image/*" multiple>
                             <small id="images-hint" style="color:var(--text-muted);"></small>
-                        </div>
-                        <div class="form-group">
-                            <label>Color Photos (optional — one photo per color, in the same order as the Colors field above)</label>
-                            <input type="file" id="product-color-images" accept="image/*" multiple>
-                            <small id="color-images-hint" style="color:var(--text-muted);">e.g. Colors: Blue, Red, Black → pick the blue photo first, then red, then black.</small>
                         </div>
                         <div class="form-group">
                             <label>Product Image</label>

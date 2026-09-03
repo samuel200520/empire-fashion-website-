@@ -492,13 +492,18 @@ function startEditProduct(id) {
     document.getElementById('product-price').value = product.price;
     document.getElementById('product-category').value = product.category || 'men';
     document.getElementById('product-sizes').value = (product.sizes || []).join(', ');
-    document.getElementById('product-colors').value = (product.colors || []).join(', ');
     document.getElementById('product-stock').value = product.stock ?? '';
     document.getElementById('image-hint').innerText = 'Leave empty to keep the current image.';
-    document.getElementById('color-images-hint').innerText = 'Leave empty to keep the current color photos.';
+    document.getElementById('color-images-hint').innerText = 'Existing photos are shown below. Pick a new file in any row to replace that color\'s photo.';
     document.getElementById('color-images-hint').style.color = '';
     document.getElementById('product-submit-btn').innerText = 'Update Product';
     document.getElementById('cancel-edit-btn').style.display = 'inline-block';
+
+    // Hydrate the color rows from the saved product
+    const colors = product.colors || [];
+    const ci = product.colorImages || {};
+    colorRows = colors.map(name => ({ name, file: null, existingUrl: ci[name] || ci[name.toLowerCase()] || null }));
+    renderColorRows();
 
     document.getElementById('view-products').scrollIntoView({ behavior: 'smooth' });
 }
@@ -508,19 +513,90 @@ function cancelEdit() {
     document.getElementById('product-form').reset();
     document.getElementById('product-edit-id').value = '';
     document.getElementById('image-hint').innerText = '';
-    document.getElementById('color-images-hint').innerText = 'e.g. Colors: Blue, Red, Black → pick the blue photo first, then red, then black.';
+    document.getElementById('color-images-hint').innerText = 'Tap “Add Color” for each color you offer. Pick the color name and its photo in the same row. Customers will see the photo change when they click that color on the store.';
     document.getElementById('color-images-hint').style.color = '';
     document.getElementById('product-submit-btn').innerText = 'Publish to Store';
     document.getElementById('cancel-edit-btn').style.display = 'none';
+    resetColorRows();
+}
+
+const MAX_COLOR_ROWS = 20;
+
+// Each row: { name: string, file: File|null, existingUrl: string|null }
+let colorRows = [];
+
+function addColorRow(name = '', file = null, existingUrl = null) {
+    if (colorRows.length >= MAX_COLOR_ROWS) {
+        showToast(`Maximum ${MAX_COLOR_ROWS} colors per product.`);
+        return;
+    }
+    colorRows.push({ name, file, existingUrl });
+    renderColorRows();
+}
+function removeColorRow(idx) {
+    colorRows.splice(idx, 1);
+    renderColorRows();
+}
+function renderColorRows() {
+    const box = document.getElementById('color-rows');
+    if (!box) return;
+    if (colorRows.length === 0) {
+        box.innerHTML = '<p style="color:var(--text-muted); font-style:italic; margin:0;">No colors added yet — tap “Add Color” below.</p>';
+        const btn = document.getElementById('add-color-row-btn');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-plus"></i> Add Color'; }
+        return;
+    }
+    box.innerHTML = colorRows.map((row, i) => `
+        <div class="color-row" data-idx="${i}">
+            <div class="color-row-thumb">
+                ${row.existingUrl
+                    ? `<img src="${esc(row.existingUrl)}" alt=""><button type="button" class="thumb-clear" onclick="clearColorPhoto(${i})" title="Remove photo">×</button>`
+                    : (row.file ? `<span style="font-size:11px;color:#28a745;">📷 ${esc(row.file.name)}</span>` : '<span style="font-size:11px;color:var(--text-muted);">No photo</span>')}
+            </div>
+            <input type="text" class="color-name-input" placeholder="Color name (e.g. Blue)" value="${esc(row.name)}" oninput="updateColorRowName(${i}, this.value)">
+            <label class="color-photo-btn" title="Pick photo">
+                <i class="fas fa-camera"></i> ${row.file || row.existingUrl ? 'Change' : 'Photo'}
+                <input type="file" accept="image/*" onchange="updateColorRowFile(${i}, this.files[0])" style="display:none;">
+            </label>
+            <button type="button" class="color-remove-btn" onclick="removeColorRow(${i})" title="Remove color"><i class="fas fa-times"></i></button>
+        </div>
+    `).join('');
+    const btn = document.getElementById('add-color-row-btn');
+    if (btn) {
+        const atMax = colorRows.length >= MAX_COLOR_ROWS;
+        btn.disabled = atMax;
+        btn.innerHTML = atMax
+            ? `<i class="fas fa-check"></i> Max ${MAX_COLOR_ROWS} colors`
+            : '<i class="fas fa-plus"></i> Add Color';
+    }
+}
+function updateColorRowName(idx, val) {
+    if (colorRows[idx]) colorRows[idx].name = val;
+}
+function updateColorRowFile(idx, file) {
+    if (!colorRows[idx]) return;
+    colorRows[idx].file = file || null;
+    colorRows[idx].existingUrl = null;
+    renderColorRows();
+}
+function clearColorPhoto(idx) {
+    if (!colorRows[idx]) return;
+    colorRows[idx].file = null;
+    colorRows[idx].existingUrl = null;
+    renderColorRows();
+}
+function resetColorRows() {
+    colorRows = [];
+    renderColorRows();
 }
 
 async function submitProduct(name, price, category, image, images, colorImages) {
     const editId = document.getElementById('product-edit-id').value;
     const sizes = document.getElementById('product-sizes').value;
-    const colors = document.getElementById('product-colors').value;
     const stock = document.getElementById('product-stock').value;
+    const cleanColors = colorRows.map(r => r.name.trim()).filter(Boolean);
     if (editId) {
-        const body = { name, price, category, sizes, colors, stock };
+        const body = { name, price, category, sizes, colors: cleanColors.join(','), stock };
         if (image) body.image = image;
         if (images) body.images = images;
         if (colorImages) body.colorImages = colorImages;
@@ -539,7 +615,7 @@ async function submitProduct(name, price, category, image, images, colorImages) 
         const res = await fetch(`${API_URL}/api/products`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, price, category, image, sizes, colors, stock, images: images || [], colorImages: colorImages || {} })
+            body: JSON.stringify({ name, price, category, image, sizes, colors: cleanColors.join(','), stock, images: images || [], colorImages: colorImages || {} })
         });
         if (!res.ok) throw new Error(await serverError(res));
         showToast('Product saved to database!');
@@ -584,7 +660,6 @@ async function handleProductSubmit(e) {
     const category = document.getElementById('product-category').value;
     const imageInput = document.getElementById('product-image');
     const imagesInput = document.getElementById('product-images');
-    const colorImagesInput = document.getElementById('product-color-images');
     const submitBtn = document.getElementById('product-submit-btn');
 
     let image = null;
@@ -603,22 +678,17 @@ async function handleProductSubmit(e) {
                 images.push(await compressImage(file, 700, 0.75));
             }
         }
-        // Color-specific photos: matched to the Colors field by order (Blue→1st, Red→2nd…)
-        if (colorImagesInput.files && colorImagesInput.files.length > 0) {
-            const colorList = document.getElementById('product-colors').value.split(',').map(c => c.trim()).filter(Boolean);
-            const files = Array.from(colorImagesInput.files).slice(0, colorList.length || 12);
+        // Per-color photos: each row carries its own (name, file). Compress and attach.
+        if (colorRows.length > 0) {
             const map = {};
-            for (let i = 0; i < files.length; i++) {
-                const key = colorList[i] ? colorList[i] : ('color-' + (i + 1));
-                map[key] = await compressImage(files[i], 700, 0.75);
-            }
-            if (colorList.length > 0 && files.length !== colorList.length) {
-                const hint = document.getElementById('color-images-hint');
-                if (hint) hint.style.color = '#dc3545';
-                showToast(`Note: you picked ${files.length} photo(s) for ${colorList.length} color(s) — match them 1-to-1.`);
-            } else {
-                const hint = document.getElementById('color-images-hint');
-                if (hint) hint.style.color = '#28a745';
+            const valid = colorRows.filter(r => r.name.trim());
+            for (let i = 0; i < valid.length; i++) {
+                const row = valid[i];
+                if (row.file) {
+                    map[row.name.trim()] = await compressImage(row.file, 700, 0.75);
+                } else if (row.existingUrl) {
+                    map[row.name.trim()] = row.existingUrl;
+                }
             }
             colorImages = map;
         }
@@ -929,6 +999,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const productForm = document.getElementById('product-form');
     if (productForm) productForm.addEventListener('submit', handleProductSubmit);
+
+    // Initialize the dynamic color rows UI (start empty; tap "Add Color")
+    renderColorRows();
 
     const promoForm = document.getElementById('promo-form');
     if (promoForm) promoForm.addEventListener('submit', handlePromoSubmit);
