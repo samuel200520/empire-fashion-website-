@@ -188,7 +188,7 @@ nav a:hover { color: #D4AF37; }
 /* Hero Banner */
 .hero {
     background-color: #111; color: #fff; text-align: center; padding: 120px 20px; margin-bottom: 50px;
-    background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('assets/images/homep.jpg');
+    background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('../assets/images/homep.jpg');
     background-size: cover; background-position: center;
 }
 .hero h1 { font-size: 60px; margin: 0; letter-spacing: 5px; color: #D4AF37; }
