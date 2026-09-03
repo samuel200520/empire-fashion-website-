@@ -493,7 +493,7 @@ function startEditProduct(id) {
     document.getElementById('product-category').value = product.category || 'men';
     document.getElementById('product-sizes').value = (product.sizes || []).join(', ');
     document.getElementById('product-stock').value = product.stock ?? '';
-    document.getElementById('image-hint').innerText = 'Leave empty to keep the current image.';
+    document.getElementById('image-hint').innerText = 'Leave empty to keep the current image. You can also just edit the color rows below — the first color photo is used as the main image.';
     document.getElementById('color-images-hint').innerText = 'Existing photos are shown below. Pick a new file in any row to replace that color\'s photo.';
     document.getElementById('color-images-hint').style.color = '';
     document.getElementById('product-submit-btn').innerText = 'Update Product';
@@ -513,7 +513,7 @@ function cancelEdit() {
     document.getElementById('product-form').reset();
     document.getElementById('product-edit-id').value = '';
     document.getElementById('image-hint').innerText = '';
-    document.getElementById('color-images-hint').innerText = 'Tap “Add Color” for each color you offer. Pick the color name and its photo in the same row. Customers will see the photo change when they click that color on the store.';
+    document.getElementById('color-images-hint').innerText = 'Tap “Add Color” for each color or variant you offer (e.g. Blue, Red, Black, or product types like Nike Air Force / Adidas Ultraboost). Pick its photo in the same row — customers see that photo when they click the color on the store.';
     document.getElementById('color-images-hint').style.color = '';
     document.getElementById('product-submit-btn').innerText = 'Publish to Store';
     document.getElementById('cancel-edit-btn').style.display = 'none';
@@ -590,15 +590,18 @@ function resetColorRows() {
     renderColorRows();
 }
 
-async function submitProduct(name, price, category, image, images, colorImages) {
+async function submitProduct(name, price, category, image, colorImages) {
     const editId = document.getElementById('product-edit-id').value;
     const sizes = document.getElementById('product-sizes').value;
     const stock = document.getElementById('product-stock').value;
     const cleanColors = colorRows.map(r => r.name.trim()).filter(Boolean);
+    // If no main image was picked, fall back to the first color photo (if any)
+    if (!image && colorImages && Object.keys(colorImages).length > 0) {
+        image = colorImages[cleanColors[0]] || Object.values(colorImages)[0];
+    }
     if (editId) {
-        const body = { name, price, category, sizes, colors: cleanColors.join(','), stock };
+        const body = { name, price, category, sizes, colors: cleanColors.join(','), stock, images: [] };
         if (image) body.image = image;
-        if (images) body.images = images;
         if (colorImages) body.colorImages = colorImages;
         const res = await fetch(`${API_URL}/api/products/${editId}`, {
             method: 'PATCH',
@@ -609,13 +612,13 @@ async function submitProduct(name, price, category, image, images, colorImages) 
         showToast('Product updated!');
     } else {
         if (!image) {
-            alert('Please choose a product image.');
+            alert('Please choose a product image or add at least one color photo.');
             return false;
         }
         const res = await fetch(`${API_URL}/api/products`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, price, category, image, sizes, colors: cleanColors.join(','), stock, images: images || [], colorImages: colorImages || {} })
+            body: JSON.stringify({ name, price, category, image, sizes, colors: cleanColors.join(','), stock, images: [], colorImages: colorImages || {} })
         });
         if (!res.ok) throw new Error(await serverError(res));
         showToast('Product saved to database!');
@@ -659,24 +662,16 @@ async function handleProductSubmit(e) {
     const price = parseFloat(document.getElementById('product-price').value);
     const category = document.getElementById('product-category').value;
     const imageInput = document.getElementById('product-image');
-    const imagesInput = document.getElementById('product-images');
     const submitBtn = document.getElementById('product-submit-btn');
 
     let image = null;
-    let images = null;
+    let images = [];
     let colorImages = null;
     try {
         submitBtn.disabled = true;
         submitBtn.innerText = 'Saving...';
         if (imageInput.files && imageInput.files[0]) {
             image = await compressImage(imageInput.files[0]);
-        }
-        // Extra gallery photos (up to 4), compressed smaller
-        if (imagesInput.files && imagesInput.files.length > 0) {
-            images = [];
-            for (const file of Array.from(imagesInput.files).slice(0, 4)) {
-                images.push(await compressImage(file, 700, 0.75));
-            }
         }
         // Per-color photos: each row carries its own (name, file). Compress and attach.
         if (colorRows.length > 0) {
@@ -692,7 +687,7 @@ async function handleProductSubmit(e) {
             }
             colorImages = map;
         }
-        await submitProduct(name, price, category, image, images, colorImages);
+        await submitProduct(name, price, category, image, colorImages);
     } catch (err) {
         console.error(err);
         showToast('Failed to save product: ' + err.message);
