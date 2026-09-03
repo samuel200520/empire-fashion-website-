@@ -34,20 +34,79 @@ pool.on('error', err => console.error('Unexpected Postgres pool error:', err.mes
 
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 
+app.disable('x-powered-by');
+
+const IS_PROD = process.env.NODE_ENV === 'production';
+if (IS_PROD) app.set('trust proxy', 1); // we sit behind Render's proxy / nginx in production
+
+// ---- Security: sensible headers on every response ----
+app.use((req, res, next) => {
+    res.set({
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
+        'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+    });
+    next();
+});
+
+// The static site is served from the project root, so formally block internal files.
+// The API routes are the only intended way to read data.
+const BLOCKED_STATIC_PATHS = [
+    '/server.js', '/db.json', '/package.json', '/package-lock.json',
+    '/seed.js', '/yarn.lock', '/npm-debug.log',
+    '/.env', '/.env.example', '/.env.local', '/.env.production', '/.dev.vars',
+    '/README.md', '/render.yaml', '/.gitignore',
+    '/.git', '/node_modules'
+];
+app.use((req, res, next) => {
+    const p = (req.path || '/').toLowerCase();
+    if (BLOCKED_STATIC_PATHS.some(blocked => {
+        const b = blocked.toLowerCase();
+        return p === b || p.startsWith(b + '/');
+    })) {
+        return res.status(404).json({ error: 'Not found' });
+    }
+    next();
+});
+
 app.use(express.json({ limit: '15mb' }));
 app.use(express.static(__dirname));
 
+// ---- Login throttling (in-memory; slows brute-force without adding a dependency) ----
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 10;
+const loginAttempts = new Map();
+function loginRateLimit(req, res, next) {
+    const now = Date.now();
+    const rec = loginAttempts.get(req.ip) || {};
+    if (!rec.resetAt || now > rec.resetAt) {
+        loginAttempts.set(req.ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+        return next();
+    }
+    rec.count += 1;
+    if (rec.count > LOGIN_MAX_ATTEMPTS) {
+        const mins = Math.max(1, Math.ceil((rec.resetAt - now) / 60000));
+        return res.status(429).json({ ok: false, error: `Too many attempts. Please try again in ${mins} minute(s).` });
+    }
+    next();
+}
+
 // ---- Session/auth setup (sessions live in PostgreSQL, survive server restarts) ----
+const SESSION_SECRET = process.env.SESSION_SECRET || 'empire-fashion-dev-secret-change-me';
+if (IS_PROD && SESSION_SECRET === 'empire-fashion-dev-secret-change-me') {
+    console.warn('WARNING: SESSION_SECRET is the insecure default. Set a long random value in production.');
+}
 app.use(session({
     store: new pgSession({
         pool,
         tableName: 'admin_sessions',
         pruneSessionInterval: 60 * 60 // clean expired rows hourly
     }),
-    secret: process.env.SESSION_SECRET || 'empire-fashion-dev-secret-change-me',
+    secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 8 }
+    cookie: { httpOnly: true, sameSite: 'lax', secure: IS_PROD, maxAge: 1000 * 60 * 60 * 8 }
 }));
 
 // ---- Database schema + one-time import from the old db.json ----
@@ -220,11 +279,12 @@ async function getAdmin() {
 }
 
 // ---- Auth ----
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', loginRateLimit, async (req, res) => {
     const { username, password } = req.body || {};
     try {
         const admin = await getAdmin();
         if (admin && username === admin.username && await bcrypt.compare(password || '', admin.password_hash)) {
+            loginAttempts.delete(req.ip); // reset the counter on a successful login
             req.session.admin = true;
             res.json({ ok: true });
         } else {

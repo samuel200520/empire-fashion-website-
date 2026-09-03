@@ -14,6 +14,19 @@ function esc(str) {
     return d.innerHTML;
 }
 
+// Branded fallback so products without a working photo don't show a broken image in admin
+const IMG_FALLBACK = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600">' +
+    '<rect width="600" height="600" fill="#111"/>' +
+    '<rect x="12" y="12" width="576" height="576" fill="none" stroke="#D4AF37" stroke-width="2"/>' +
+    '<text x="300" y="285" text-anchor="middle" font-family="Georgia, serif" font-size="46" letter-spacing="6" fill="#D4AF37">EMPIRE</text>' +
+    '<text x="300" y="330" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="18" letter-spacing="3" fill="#ccc">FASHION HOUSE</text>' +
+    '</svg>'
+);
+function imgAttr(src, alt) {
+    return `src="${esc(src)}" alt="${esc(alt)}" onerror="this.onerror=null;this.src='${IMG_FALLBACK}';"`;
+}
+
 function waLink(phone, text) {
     const digits = String(phone || '').replace(/\D/g, '');
     if (!digits) return null;
@@ -511,7 +524,7 @@ function renderInventory() {
             : `<span class="${product.stock === 0 ? 'stock-out' : product.stock <= 3 ? 'stock-low' : ''}">${product.stock}</span>`;
         tableBody.innerHTML += `
             <tr>
-                <td><img src="${esc(product.image)}" alt="${esc(product.name)}"></td>
+                <td><img ${imgAttr(product.image, product.name)}></td>
                 <td>${esc(product.name)}</td>
                 <td><span class="cat-badge">${esc(product.category || 'uncategorized')}</span></td>
                 <td>NLE ${(parseFloat(product.price) || 0).toLocaleString()}</td>

@@ -48,7 +48,7 @@ function renderWishlistPanel() {
     }
     box.innerHTML = items.map(p => `
         <div class="cart-item">
-            <img src="${esc(p.image)}" alt="${esc(p.name)}" onclick="openProduct(${p.id})" style="cursor:pointer;">
+            <img ${imgAttr(p.image, p.name)} onclick="openProduct(${p.id})" style="cursor:pointer;">
             <div class="cart-item-details">
                 <h4>${esc(p.name)}</h4>
                 <p>NLE ${esc(p.price)}</p>
@@ -92,6 +92,28 @@ function esc(str) {
     return d.innerHTML;
 }
 
+// Branded fallback image: shown whenever a product picture is missing or fails to load.
+const IMG_FALLBACK = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600">' +
+    '<rect width="600" height="600" fill="#111"/>' +
+    '<rect x="12" y="12" width="576" height="576" fill="none" stroke="#D4AF37" stroke-width="2"/>' +
+    '<text x="300" y="285" text-anchor="middle" font-family="Georgia, serif" font-size="46" letter-spacing="6" fill="#D4AF37">EMPIRE</text>' +
+    '<text x="300" y="330" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="18" letter-spacing="3" fill="#ccc">FASHION HOUSE</text>' +
+    '</svg>'
+);
+
+// Builds a safe <img> tag with an automatic branded fallback if the picture 404s.
+function imgAttr(src, alt) {
+    return `src="${esc(src)}" alt="${esc(alt)}" onerror="this.onerror=null;this.src='${IMG_FALLBACK}';"`;
+}
+
+// Set an <img> element's source with the same fallback logic (for JS property assignments).
+function setImage(el, src, alt) {
+    el.onerror = function () { this.onerror = null; this.src = IMG_FALLBACK; };
+    el.src = src;
+    if (alt !== undefined) el.alt = alt;
+}
+
 // Known color names get a matching swatch dot; unknown names still show as text
 const COLOR_HEX = {
     'black': '#111111', 'white': '#ffffff', 'red': '#dc3545', 'blue': '#0275d8',
@@ -125,7 +147,7 @@ function productCardHTML(product) {
     return `
         <div class="product-card">
             <div class="product-image" onclick="openProduct(${product.id})">
-                <img src="${esc(product.image)}" alt="${esc(product.name)}">
+                <img ${imgAttr(product.image, product.name)}>
                 ${soldOut ? '<span class="soldout-badge">SOLD OUT</span>' : ''}
                 ${isNewProduct(product) ? '<span class="new-badge">NEW</span>' : ''}
                 <button class="heart-btn ${wished ? 'wished' : ''}" onclick="toggleWishlist(${product.id}, event)" title="${wished ? 'Remove from wishlist' : 'Save to wishlist'}">${wished ? '♥' : '♡'}</button>
@@ -234,7 +256,7 @@ function updateCartUI() {
         cart.forEach((item, index) => {
             cartItemsContainer.innerHTML += `
                 <div class="cart-item">
-                    <img src="${esc(item.image)}" alt="${esc(item.name)}">
+                    <img ${imgAttr(item.image, item.name)}>
                     <div class="cart-item-details">
                         <h4>${esc(item.name)}${item.size ? `<span class="cart-size">${esc(item.size)}</span>` : ''}${item.color ? `<span class="cart-color">${colorDot(item.color)}${esc(item.color)}</span>` : ''}</h4>
                         <p>NLE ${esc(item.price)}</p>
@@ -405,8 +427,7 @@ function renderProduct(id) {
     pdSelectedSize = '';
     pdSelectedColor = '';
 
-    document.getElementById('pd-image').src = p.image;
-    document.getElementById('pd-image').alt = p.name;
+    setImage(document.getElementById('pd-image'), p.image, p.name);
     document.getElementById('pd-name').innerText = p.name;
     document.getElementById('pd-price').innerText = 'NLE ' + p.price;
     document.getElementById('pd-link').innerText = location.origin + '/#product=' + p.id;
@@ -417,7 +438,7 @@ function renderProduct(id) {
     if (gallery.length > 1) {
         thumbsEl.style.display = 'flex';
         thumbsEl.innerHTML = gallery.map((src, i) =>
-            `<img src="${esc(src)}" class="pd-thumb ${i === 0 ? 'active' : ''}" onclick="swapPdImage(this, '${esc(src).replace(/'/g, '%27')}')" alt="Photo ${i + 1}">`
+            `<img src="${esc(src)}" class="pd-thumb ${i === 0 ? 'active' : ''}" onclick="swapPdImage(this, '${esc(src).replace(/'/g, '%27')}')" alt="Photo ${i + 1}" onerror="this.onerror=null;this.src='${IMG_FALLBACK}';">`
         ).join('');
     } else {
         thumbsEl.style.display = 'none';
@@ -480,7 +501,7 @@ function renderProduct(id) {
     if (rel.length === 0) rel = storeProducts.filter(x => x.id !== p.id).slice(0, 4);
     relEl.innerHTML = rel.map(x => `
         <div class="rel-card" onclick="openProduct(${x.id})">
-            <img src="${esc(x.image)}" alt="${esc(x.name)}">
+            <img ${imgAttr(x.image, x.name)}>
             <p>${esc(x.name)}</p>
             <span>NLE ${esc(x.price)}</span>
         </div>
