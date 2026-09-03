@@ -618,8 +618,15 @@ function selectColor(btn, color) {
     pdSelectedColor = color;
     // If the admin uploaded a per-color photo, swap the main image and refresh the gallery
     if (!pdProduct) return;
+    // Case-insensitive, whitespace-tolerant lookup so "Blue" / "blue" / " blue " all match
+    const wanted = String(color || '').trim().toLowerCase();
     const ci = pdProduct.colorImages || {};
-    const colorPhoto = ci[color] || ci[color.toLowerCase()];
+    let colorPhoto = ci[color] || ci[color.toLowerCase()] || ci[wanted];
+    if (!colorPhoto) {
+        for (const k of Object.keys(ci)) {
+            if (String(k).trim().toLowerCase() === wanted) { colorPhoto = ci[k]; break; }
+        }
+    }
     if (!colorPhoto) return;
     document.getElementById('pd-image').src = colorPhoto;
     document.querySelectorAll('#pd-thumbs .pd-thumb').forEach(t => t.classList.remove('active'));
