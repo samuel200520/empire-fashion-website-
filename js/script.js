@@ -168,13 +168,18 @@ function applyFilters() {
     let list = storeProducts.slice();
 
     if (currentCategory !== 'all') {
-        list = list.filter(p => (p.category || '').toLowerCase() === currentCategory);
+        list = list.filter(p => {
+            const cats = (p.categories && p.categories.length ? p.categories : (p.category || '').split(','))
+                .map(c => String(c).trim().toLowerCase())
+                .filter(Boolean);
+            return cats.includes(currentCategory);
+        });
     }
     if (searchTerm) {
         const t = searchTerm.toLowerCase();
         list = list.filter(p =>
             (p.name || '').toLowerCase().includes(t) ||
-            (p.category || '').toLowerCase().includes(t) ||
+            (p.categories || (p.category || '').split(',')).some(c => c.toLowerCase().includes(t)) ||
             (p.colors || []).some(c => c.toLowerCase().includes(t))
         );
     }
@@ -493,7 +498,6 @@ function renderProduct(id) {
         cWrap.style.display = 'none';
         cBox.innerHTML = '';
     }
-
     // Stock line + Add button state
     const stEl = document.getElementById('pd-stock');
     const addBtn = document.getElementById('pd-add');
@@ -510,7 +514,12 @@ function renderProduct(id) {
 
     // Related items: same category first, fallback to anything else
     const relEl = document.getElementById('pd-related');
-    let rel = storeProducts.filter(x => x.id !== p.id && (x.category || '') === (p.category || '')).slice(0, 4);
+    const pCats = new Set((p.categories || (p.category || '').split(',')).map(c => String(c).trim().toLowerCase()));
+    let rel = storeProducts.filter(x => x.id !== p.id &&
+        (x.categories || (x.category || '').split(','))
+            .map(c => String(c).trim().toLowerCase())
+            .some(c => pCats.has(c))
+    ).slice(0, 4);
     if (rel.length === 0) rel = storeProducts.filter(x => x.id !== p.id).slice(0, 4);
     relEl.innerHTML = rel.map(x => `
         <div class="rel-card" onclick="openProduct(${x.id})">
@@ -616,21 +625,22 @@ function selectColor(btn, color) {
     document.querySelectorAll('#pd-colors .color-btn').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
     pdSelectedColor = color;
-    // If the admin uploaded a per-color photo, swap the main image and refresh the gallery
     if (!pdProduct) return;
-    // Case-insensitive, whitespace-tolerant lookup so "Blue" / "blue" / " blue " all match
     const wanted = String(color || '').trim().toLowerCase();
     const ci = pdProduct.colorImages || {};
-    let colorPhoto = ci[color] || ci[color.toLowerCase()] || ci[wanted];
+    // Keys are saved lowercase, so look up directly. Fallback to scanning keys for safety.
+    let colorPhoto = ci[wanted];
     if (!colorPhoto) {
         for (const k of Object.keys(ci)) {
             if (String(k).trim().toLowerCase() === wanted) { colorPhoto = ci[k]; break; }
         }
     }
-    if (!colorPhoto) return;
+    if (!colorPhoto) {
+        console.warn('[Empire] No color photo for', color, '— available keys:', Object.keys(ci));
+        return;
+    }
     document.getElementById('pd-image').src = colorPhoto;
     document.querySelectorAll('#pd-thumbs .pd-thumb').forEach(t => t.classList.remove('active'));
-    // Rebuild the thumbs so the chosen color photo is included and active
     const gallery = [colorPhoto, pdProduct.image, ...(pdProduct.images || []).filter(s => s !== colorPhoto)];
     const thumbsEl = document.getElementById('pd-thumbs');
     if (gallery.length > 1) {

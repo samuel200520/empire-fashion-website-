@@ -227,8 +227,11 @@ function parseColorImages(raw) {
         const o = JSON.parse(raw || '{}');
         if (o && typeof o === 'object' && !Array.isArray(o)) {
             const out = {};
+            // Lowercase + trim keys so the storefront lookup is bulletproof
             Object.entries(o).forEach(([k, v]) => {
-                if (typeof v === 'string' && v.length > 10 && Object.keys(out).length < 20) out[k] = v;
+                if (typeof v === 'string' && v.length > 10 && Object.keys(out).length < 20) {
+                    out[String(k).trim().toLowerCase()] = v;
+                }
             });
             return out;
         }
@@ -238,7 +241,9 @@ function parseColorImages(raw) {
 function mapProduct(r) {
     return {
         id: r.id, name: r.name, price: Number(r.price), category: r.category, image: r.image,
+        categories: String(r.category || '').split(',').map(c => c.trim().toLowerCase()).filter(Boolean),
         sizes: String(r.sizes || '').split(',').map(s => s.trim()).filter(Boolean),
+        // Colors preserve their display case; only colorImages keys are lowercased for lookups
         colors: String(r.colors || '').split(',').map(c => c.trim()).filter(Boolean),
         stock: r.stock === null || r.stock === undefined ? null : Number(r.stock),
         images: parseImages(r.images),
@@ -261,7 +266,13 @@ function normImages(images) {
 }
 function normColorImages(obj) {
     if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null; // leave unchanged
-    return JSON.stringify(parseColorImages(obj));
+    const normalized = {};
+    Object.entries(obj).forEach(([k, v]) => {
+        if (typeof v === 'string' && v.length > 10 && Object.keys(normalized).length < 20) {
+            normalized[String(k).trim().toLowerCase()] = v;
+        }
+    });
+    return JSON.stringify(normalized);
 }
 async function validatePromo(code) {
     if (!code) return null;

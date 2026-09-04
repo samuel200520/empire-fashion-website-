@@ -817,6 +817,32 @@ body.dark-mode .cat-badge { color: var(--primary-gold); }
 }
 .cart-color .color-dot { width: 10px; height: 10px; }
 
+/* Admin: multi-category checkboxes */
+.cat-checkboxes {
+    display: flex; flex-wrap: wrap; gap: 10px;
+}
+.cat-check {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    background: var(--bg-input);
+    color: var(--text-main);
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 14px;
+    transition: 0.2s;
+    user-select: none;
+}
+.cat-check:hover { border-color: var(--primary-gold); }
+.cat-check input { accent-color: var(--primary-gold); width: 16px; height: 16px; }
+.cat-check:has(input:checked) {
+    background: rgba(212, 175, 55, 0.12);
+    border-color: var(--primary-gold);
+    color: var(--primary-gold-dark);
+}
+body.dark-mode .cat-check:has(input:checked) { color: var(--primary-gold); }
+
 /* Admin: dynamic Color rows (name + photo) */
 .color-row {
     display: flex;

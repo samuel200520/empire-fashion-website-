@@ -468,7 +468,7 @@ function renderInventory() {
             <tr>
                 <td><img ${imgAttr(product.image, product.name)}></td>
                 <td>${esc(product.name)}</td>
-                <td><span class="cat-badge">${esc(product.category || 'uncategorized')}</span></td>
+                <td>${(product.category || '').split(',').filter(Boolean).map(c => `<span class="cat-badge">${esc(c)}</span>`).join(' ') || '<span class="cat-badge">uncategorized</span>'}</td>
                 <td>NLE ${(parseFloat(product.price) || 0).toLocaleString()}</td>
                 <td>${sizes.length > 0 ? sizes.map(s => `<span class="cat-badge">${esc(s)}</span>`).join(' ') : '--'}</td>
                 <td>${colors.length > 0 ? colors.map(c => `<span class="cat-badge">${esc(c)}</span>`).join(' ') : '--'}</td>
@@ -490,7 +490,7 @@ function startEditProduct(id) {
     document.getElementById('product-edit-id').value = id;
     document.getElementById('product-name').value = product.name;
     document.getElementById('product-price').value = product.price;
-    document.getElementById('product-category').value = product.category || 'men';
+    setSelectedCategories(product.category ? String(product.category).split(',') : []);
     document.getElementById('product-sizes').value = (product.sizes || []).join(', ');
     document.getElementById('product-stock').value = product.stock ?? '';
     document.getElementById('image-hint').innerText = 'Leave empty to keep the current image. You can also just edit the color rows below — the first color photo is used as the main image.';
@@ -502,7 +502,11 @@ function startEditProduct(id) {
     // Hydrate the color rows from the saved product
     const colors = product.colors || [];
     const ci = product.colorImages || {};
-    colorRows = colors.map(name => ({ name, file: null, existingUrl: ci[name] || ci[name.toLowerCase()] || null }));
+    colorRows = colors.map(name => ({
+        name,
+        file: null,
+        existingUrl: ci[name] || ci[name.toLowerCase()] || ci[String(name).trim().toLowerCase()] || null
+    }));
     renderColorRows();
 
     document.getElementById('view-products').scrollIntoView({ behavior: 'smooth' });
@@ -521,6 +525,18 @@ function cancelEdit() {
 }
 
 const MAX_COLOR_ROWS = 20;
+
+function getSelectedCategories() {
+    return Array.from(document.querySelectorAll('#product-category input[type=checkbox]:checked'))
+        .map(cb => cb.value)
+        .filter(Boolean);
+}
+function setSelectedCategories(cats) {
+    const set = new Set((cats || []).map(c => String(c).toLowerCase()));
+    document.querySelectorAll('#product-category input[type=checkbox]').forEach(cb => {
+        cb.checked = set.has(cb.value);
+    });
+}
 
 // Each row: { name: string, file: File|null, existingUrl: string|null }
 let colorRows = [];
@@ -590,17 +606,18 @@ function resetColorRows() {
     renderColorRows();
 }
 
-async function submitProduct(name, price, category, image, colorImages) {
+async function submitProduct(name, price, image, colorImages) {
     const editId = document.getElementById('product-edit-id').value;
     const sizes = document.getElementById('product-sizes').value;
     const stock = document.getElementById('product-stock').value;
+    const categories = getSelectedCategories();
     const cleanColors = colorRows.map(r => r.name.trim()).filter(Boolean);
     // If no main image was picked, fall back to the first color photo (if any)
     if (!image && colorImages && Object.keys(colorImages).length > 0) {
         image = colorImages[cleanColors[0]] || Object.values(colorImages)[0];
     }
     if (editId) {
-        const body = { name, price, category, sizes, colors: cleanColors.join(','), stock, images: [] };
+        const body = { name, price, category: categories.join(','), sizes, colors: cleanColors.join(','), stock, images: [] };
         if (image) body.image = image;
         if (colorImages) body.colorImages = colorImages;
         const res = await fetch(`${API_URL}/api/products/${editId}`, {
@@ -618,7 +635,7 @@ async function submitProduct(name, price, category, image, colorImages) {
         const res = await fetch(`${API_URL}/api/products`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, price, category, image, sizes, colors: cleanColors.join(','), stock, images: [], colorImages: colorImages || {} })
+            body: JSON.stringify({ name, price, category: categories.join(','), image, sizes, colors: cleanColors.join(','), stock, images: [], colorImages: colorImages || {} })
         });
         if (!res.ok) throw new Error(await serverError(res));
         showToast('Product saved to database!');
@@ -660,7 +677,6 @@ async function handleProductSubmit(e) {
     e.preventDefault();
     const name = document.getElementById('product-name').value;
     const price = parseFloat(document.getElementById('product-price').value);
-    const category = document.getElementById('product-category').value;
     const imageInput = document.getElementById('product-image');
     const submitBtn = document.getElementById('product-submit-btn');
 
@@ -679,15 +695,18 @@ async function handleProductSubmit(e) {
             const valid = colorRows.filter(r => r.name.trim());
             for (let i = 0; i < valid.length; i++) {
                 const row = valid[i];
+                // Lowercase + trim the key so the storefront lookup is case-insensitive
+                const key = row.name.trim().toLowerCase();
                 if (row.file) {
-                    map[row.name.trim()] = await compressImage(row.file, 700, 0.75);
+                    map[key] = await compressImage(row.file, 700, 0.75);
                 } else if (row.existingUrl) {
-                    map[row.name.trim()] = row.existingUrl;
+                    map[key] = row.existingUrl;
                 }
             }
             colorImages = map;
+            console.log('[Empire] Saving color images for keys:', Object.keys(map));
         }
-        await submitProduct(name, price, category, image, colorImages);
+        await submitProduct(name, price, image, colorImages);
     } catch (err) {
         console.error(err);
         showToast('Failed to save product: ' + err.message);
