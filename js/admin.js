@@ -494,6 +494,13 @@ function startEditProduct(id) {
     document.getElementById('product-sizes').value = (product.sizes || []).join(', ');
     document.getElementById('product-stock').value = product.stock ?? '';
     document.getElementById('image-hint').innerText = 'Leave empty to keep the current image. You can also just edit the color rows below — the first color photo is used as the main image.';
+    // Seed the main-image preview from the saved product image
+    if (product.image) {
+        const img = document.getElementById('product-image-preview-img');
+        const wrap = document.getElementById('product-image-preview');
+        if (img) img.src = product.image;
+        if (wrap) wrap.style.display = 'inline-block';
+    }
     document.getElementById('color-images-hint').innerText = 'Existing photos are shown below. Pick a new file in any row to replace that color\'s photo.';
     document.getElementById('color-images-hint').style.color = '';
     document.getElementById('product-submit-btn').innerText = 'Update Product';
@@ -521,7 +528,49 @@ function cancelEdit() {
     document.getElementById('color-images-hint').style.color = '';
     document.getElementById('product-submit-btn').innerText = 'Publish to Store';
     document.getElementById('cancel-edit-btn').style.display = 'none';
+    clearMainImage();
     resetColorRows();
+}
+
+// ---- Admin photo preview (before publish) ----
+let mainImagePickedDataUrl = null;
+
+function previewMainImage(input) {
+    if (!input.files || !input.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+        const url = ev.target.result;
+        mainImagePickedDataUrl = url;
+        const img = document.getElementById('product-image-preview-img');
+        const wrap = document.getElementById('product-image-preview');
+        if (img) img.src = url;
+        if (wrap) wrap.style.display = 'inline-block';
+    };
+    reader.readAsDataURL(input.files[0]);
+}
+
+function clearMainImage() {
+    mainImagePickedDataUrl = null;
+    const input = document.getElementById('product-image');
+    if (input) input.value = '';
+    const wrap = document.getElementById('product-image-preview');
+    if (wrap) wrap.style.display = 'none';
+    const img = document.getElementById('product-image-preview-img');
+    if (img) img.src = '';
+}
+
+function openAdminPhotoPreview(src) {
+    if (!src) return;
+    const box = document.getElementById('admin-photo-lightbox');
+    const img = document.getElementById('admin-photo-lightbox-img');
+    if (img) img.src = src;
+    if (box) box.style.display = 'flex';
+}
+function closeAdminPhotoPreview() {
+    const box = document.getElementById('admin-photo-lightbox');
+    if (box) box.style.display = 'none';
+    const img = document.getElementById('admin-photo-lightbox-img');
+    if (img) img.src = '';
 }
 
 const MAX_COLOR_ROWS = 20;
@@ -566,8 +615,8 @@ function renderColorRows() {
         <div class="color-row" data-idx="${i}">
             <div class="color-row-thumb">
                 ${row.existingUrl
-                    ? `<img src="${esc(row.existingUrl)}" alt=""><button type="button" class="thumb-clear" onclick="clearColorPhoto(${i})" title="Remove photo">×</button>`
-                    : (row.file ? `<span style="font-size:11px;color:#28a745;">📷 ${esc(row.file.name)}</span>` : '<span style="font-size:11px;color:var(--text-muted);">No photo</span>')}
+                    ? `<img src="${esc(row.existingUrl)}" alt="" onclick="openAdminPhotoPreview(this.src)" title="Click to enlarge"><button type="button" class="thumb-clear" onclick="clearColorPhoto(${i})" title="Remove photo">×</button>`
+                    : (row.file ? `<img src="" alt="" data-pending="1" title="Click to enlarge" onclick="openColorPhotoPreview(${i})"><button type="button" class="thumb-clear" onclick="clearColorPhoto(${i})" title="Remove photo">×</button>` : '<span style="font-size:11px;color:var(--text-muted);">No photo</span>')}
             </div>
             <input type="text" class="color-name-input" placeholder="Color name (e.g. Blue)" value="${esc(row.name)}" oninput="updateColorRowName(${i}, this.value)">
             <label class="color-photo-btn" title="Pick photo">
@@ -577,6 +626,17 @@ function renderColorRows() {
             <button type="button" class="color-remove-btn" onclick="removeColorRow(${i})" title="Remove color"><i class="fas fa-times"></i></button>
         </div>
     `).join('');
+    // Render any pending (not-yet-saved) files into the thumb via FileReader
+    colorRows.forEach((row, i) => {
+        if (row.file && !row.existingUrl) {
+            const reader = new FileReader();
+            reader.onload = ev => {
+                const img = document.querySelector(`.color-row[data-idx="${i}"] .color-row-thumb img`);
+                if (img) img.src = ev.target.result;
+            };
+            reader.readAsDataURL(row.file);
+        }
+    });
     const btn = document.getElementById('add-color-row-btn');
     if (btn) {
         const atMax = colorRows.length >= MAX_COLOR_ROWS;
@@ -594,6 +654,12 @@ function updateColorRowFile(idx, file) {
     colorRows[idx].file = file || null;
     colorRows[idx].existingUrl = null;
     renderColorRows();
+}
+function openColorPhotoPreview(idx) {
+    const row = colorRows[idx];
+    if (!row) return;
+    const img = document.querySelector(`.color-row[data-idx="${idx}"] .color-row-thumb img`);
+    if (img && img.src) openAdminPhotoPreview(img.src);
 }
 function clearColorPhoto(idx) {
     if (!colorRows[idx]) return;
