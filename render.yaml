@@ -1,6 +1,6 @@
-# Render blueprint: one-click deployment for Empire Fashion House.
-# In Render: New -> Blueprint -> select this repo. It provisions the
-# web service AND a managed PostgreSQL database, wiring the URL together.
+# Render blueprint for Empire Fashion House.
+# The database lives on Neon (not Render). The DATABASE_URL is set
+# in the Render dashboard.
 services:
   - type: web
     name: empire-fashion-website
@@ -13,20 +13,12 @@ services:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        fromDatabase:
-          name: empire-fashion-db
-          property: connectionString
+        sync: false
       - key: SESSION_SECRET
         generateValue: true
       - key: ADMIN_USER
         value: admin
-      # Set these in the Render dashboard (they are secrets, not defaults):
       - key: MONIME_TOKEN
         sync: false
       - key: MONIME_SPACE
         sync: false
-
-databases:
-  - name: empire-fashion-db
-    plan: free
-    databaseName: empire_fashion
