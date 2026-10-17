@@ -13,6 +13,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Cormorant+Garamond:ital,wght@1,500;1,600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -32,9 +33,9 @@
             </ul>
         </nav>
         <div class="header-actions">
-            <div class="wishlist-btn" onclick="toggleWishlistPanel()" title="Wishlist">♥ <span id="wishlist-count">0</span></div>
-            <div class="cart-btn" onclick="toggleCart()">🛒 Cart (<span id="cart-count">0</span>)</div>
-            <button class="hamburger" id="hamburger-btn" onclick="toggleMobileNav()">☰</button>
+            <div class="wishlist-btn" onclick="toggleWishlistPanel()" title="Wishlist"><i class="fas fa-heart"></i> <span id="wishlist-count">0</span></div>
+            <div class="cart-btn" onclick="toggleCart()"><i class="fas fa-shopping-cart"></i> Cart (<span id="cart-count">0</span>)</div>
+            <button class="hamburger" id="hamburger-btn" onclick="toggleMobileNav()" aria-label="Menu"><i class="fas fa-bars"></i></button>
         </div>
     </header>
 
@@ -60,8 +61,8 @@
                     <button class="btn-outline-dark" onclick="openCategory('clothing')">Explore Clothing</button>
                 </div>
                 <div class="hero-offer">
-                    <span class="offer-chip">🔥 Special Offer</span>
-                    <span class="offer-note">Use code <strong>FREETOWN10</strong> for 10% off your first order</span>
+                    <span class="offer-chip"><i class="fas fa-shield-alt"></i> 100% Authentic</span>
+                    <span class="offer-note">Every piece guaranteed genuine — delivered across Freetown.</span>
                 </div>
             </div>
             <div class="hero-visual">
@@ -97,27 +98,27 @@
         </div>
         <div class="category-grid">
             <a href="#products-section" class="cat-tile cat-clothing" onclick="openCategory('clothing'); return false;">
-                <span class="cat-icon">👕</span>
+                <span class="cat-icon"><i class="fas fa-tshirt"></i></span>
                 <span class="cat-name">Clothing</span>
                 <span class="cat-cta">Shop Collection →</span>
             </a>
             <a href="#products-section" class="cat-tile cat-shoes" onclick="openCategory('shoes'); return false;">
-                <span class="cat-icon">👟</span>
+                <span class="cat-icon"><i class="fas fa-shoe-prints"></i></span>
                 <span class="cat-name">Shoes</span>
                 <span class="cat-cta">Shop Collection →</span>
             </a>
             <a href="#products-section" class="cat-tile cat-school-supplies" onclick="openCategory('school-supplies'); return false;">
-                <span class="cat-icon">🎒</span>
+                <span class="cat-icon"><i class="fas fa-book"></i></span>
                 <span class="cat-name">School Supplies</span>
                 <span class="cat-cta">Shop Collection →</span>
             </a>
             <a href="#products-section" class="cat-tile cat-ladies-accessories" onclick="openCategory('ladies-accessories'); return false;">
-                <span class="cat-icon">💍</span>
+                <span class="cat-icon"><i class="fas fa-gem"></i></span>
                 <span class="cat-name">Ladies&#39; Accessories</span>
                 <span class="cat-cta">Shop Collection →</span>
             </a>
             <a href="#products-section" class="cat-tile cat-other" onclick="openCategory('other'); return false;">
-                <span class="cat-icon">📦</span>
+                <span class="cat-icon"><i class="fas fa-box-open"></i></span>
                 <span class="cat-name">Other Goods</span>
                 <span class="cat-cta">Shop Collection →</span>
             </a>
@@ -131,7 +132,7 @@
         </div>
         <div class="store-controls">
             <div class="store-search">
-                <input type="text" id="store-search" placeholder="🔍 Search products, colors, description...">
+                <input type="text" id="store-search" placeholder="Search products, colors, description...">
             </div>
             <select id="sort-select" class="sort-select">
                 <option value="featured">Sort: Featured</option>
@@ -151,7 +152,7 @@
                 <h2>About Empire Fashion House</h2>
                 <p>Empire Fashion House is Sierra Leone's premier destination for premium streetwear and luxury fashion. We believe style is a statement — that's why every piece in our collection is handpicked to help you own your crown.</p>
                 <p>From classic sneakers to bold fits, we bring the world's best brands and our own exclusive drops straight to your doorstep in Freetown and beyond.</p>
-                <a class="btn-outline-dark" href="track.html">📦 Track Your Order</a>
+                <a class="btn-outline-dark" href="track.html"><i class="fas fa-truck"></i> Track Your Order</a>
             </div>
             <div class="about-stats">
                 <div class="stat"><span class="stat-num">100%</span><span class="stat-label">Authentic Pieces</span></div>
@@ -177,7 +178,7 @@
                 <a href="#" data-category="school-supplies">School Supplies</a>
                 <a href="#" data-category="ladies-accessories">Ladies' Accessories</a>
                 <a href="#" data-category="other">Other Goods</a>
-                <a href="track.html">📦 Track Your Order</a>
+                <a href="track.html"><i class="fas fa-truck"></i> Track Your Order</a>
             </div>
             <div class="footer-col">
                 <h3>Contact Us</h3>
@@ -188,10 +189,10 @@
             <div class="footer-col">
                 <h3>Follow Us</h3>
                 <div class="social-links">
-                    <a href="#" class="social-icon">📘</a>
-                    <a href="#" class="social-icon">📸</a>
-                    <a href="#" class="social-icon">🐦</a>
-                    <a href="#" class="social-icon">📺</a>
+                    <a href="#" class="social-icon" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="#" class="social-icon" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="#" class="social-icon" aria-label="Twitter / X"><i class="fab fa-twitter"></i></a>
+                    <a href="#" class="social-icon" aria-label="YouTube"><i class="fab fa-youtube"></i></a>
                 </div>
             </div>
         </div>
@@ -266,7 +267,7 @@
                 <h3 style="margin:15px 0 5px; color:#111;">Order Placed!</h3>
                 <p style="font-size:18px; color:#111;">Your order number is <strong id="success-order-id" style="color:#D4AF37;"></strong></p>
                 <p style="color:#777;">We will contact you on WhatsApp shortly to confirm delivery.</p>
-                <p style="margin-top:10px;"><a href="track.html" style="color:#b8941f; font-weight:bold;">📦 Track your order →</a></p>
+                <p style="margin-top:10px;"><a href="track.html" style="color:#b8941f; font-weight:bold;"><i class="fas fa-truck"></i> Track your order →</a></p>
                 <button type="button" class="checkout-btn" style="width:100%; margin-top:15px;" onclick="hideCheckoutForm()">Continue Shopping</button>
             </div>
             <form id="checkout-form">
@@ -322,7 +323,7 @@
     <!-- Wishlist Sidebar -->
     <div id="wishlist-panel" class="wishlist-panel">
         <div class="cart-header">
-            <h3>♥ Your Wishlist</h3>
+            <h3><i class="fas fa-heart"></i> Your Wishlist</h3>
             <button onclick="toggleWishlistPanel()" class="close-btn">&times;</button>
         </div>
         <div id="wishlist-items" class="cart-items"></div>
@@ -330,7 +331,7 @@
     <div id="wishlist-overlay" class="cart-overlay" onclick="toggleWishlistPanel()"></div>
 
     <!-- Floating WhatsApp Button -->
-    <a href="https://wa.me/23233600560?text=Hello%20Empire%20Fashion%20House!" target="_blank" class="wa-float" title="Chat with us on WhatsApp">💬</a>
+    <a href="https://wa.me/23233600560?text=Hello%20Empire%20Fashion%20House!" target="_blank" class="wa-float" title="Chat with us on WhatsApp"><i class="fab fa-whatsapp"></i></a>
 
     <script src="js/script.js"></script>
 </body>

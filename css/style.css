@@ -1730,3 +1730,60 @@ body > header nav a { font-size: 12px; letter-spacing: 1.5px; }
     .cat-name { font-size: 16px; }
     .cat-icon { font-size: 30px; }
 }
+
+/* =========================================
+   DESIGN TOKENS & STOREFRONT POLISH 2026
+   consistency pass: variables, contrast,
+   radii, grid, surfaces, icons
+   ========================================= */
+:root {
+    --ef-bg: #f7f6f2;
+    --ef-surface: #ffffff;
+    --ef-ink: #0d0d0d;
+    --ef-muted: #555555;
+    --ef-gold: #D4AF37;
+    --ef-gold-ink: #7a6210;   /* accessible gold: small text on light surfaces */
+    --ef-radius: 4px;
+    --ef-shadow: 0 18px 40px rgba(0, 0, 0, 0.12);
+}
+
+/* 1. One unified dark surface across the storefront (was a mix of #000/#111/#0d0d0d) */
+footer,
+.mobile-nav,
+.cart-header,
+.offer-band { background-color: var(--ef-ink); }
+
+/* 2. Accessible gold for small text on light surfaces (~5.9:1 contrast) */
+.section-eyebrow,
+.hero-eyebrow,
+.offer-note strong,
+.stat-num { color: var(--ef-gold-ink); }
+
+/* 3. Editorial radius language (2-4px; circles reserved for status dots) */
+.product-card,
+.cat-tile,
+.cat-tile::after,
+.stat,
+.offer-chip,
+.store-search input,
+.sort-select,
+.add-to-cart { border-radius: var(--ef-radius); }
+
+/* 4. True responsive product grid — consistent rows at any screen width */
+.products {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 25px;
+    justify-content: center;
+}
+.product-card { width: 100%; max-width: none; }
+.product-card { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); }
+.product-card:hover { box-shadow: var(--ef-shadow); }
+
+/* 5. Icon alignment inside buttons, chips, tiles and the floating button */
+body > header .cart-btn i,
+body > header .wishlist-btn i { margin-right: 6px; }
+.offer-chip i { margin-right: 6px; }
+.cat-icon i { display: block; line-height: 1; }
+.wa-float i { line-height: 1; }
+.social-icon i { vertical-align: middle; }
