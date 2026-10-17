@@ -177,6 +177,7 @@ async function initDb() {
         ALTER TABLE products ADD COLUMN IF NOT EXISTS stock INT;
         ALTER TABLE products ADD COLUMN IF NOT EXISTS images TEXT;
         ALTER TABLE products ADD COLUMN IF NOT EXISTS color_images TEXT DEFAULT '{}';
+        ALTER TABLE products ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
         ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code TEXT NOT NULL DEFAULT '';
         UPDATE products SET stock = NULL WHERE stock = 0 AND sizes = '';
     `);
@@ -213,6 +214,25 @@ async function initDb() {
             console.error('db.json import skipped:', e.message);
         }
     }
+
+    // One-time catalogue tidy: move the legacy fashion-only categories into the
+    // new multi-goods taxonomy (clothing / shoes / school-supplies / ladies-accessories / other).
+    // Idempotent — legacy tokens no longer exist after the first run.
+    try {
+        const legacyMap = { men: 'clothing', women: 'clothing', accessories: 'other', uncategorized: 'other' };
+        const { rows: catRows } = await pool.query('SELECT id, category FROM products');
+        for (const r of catRows) {
+            const next = String(r.category || '').split(',')
+                .map(c => legacyMap[String(c).trim().toLowerCase()] || c)
+                .filter(Boolean)
+                .join(',');
+            if (next !== String(r.category || '')) {
+                await pool.query('UPDATE products SET category = $1 WHERE id = $2', [next, r.id]);
+            }
+        }
+    } catch (e) {
+        console.error('Category migration skipped:', e.message);
+    }
 }
 
 // ---- Row mappers (keep the same JSON shape the frontend already uses) ----
@@ -241,6 +261,7 @@ function parseColorImages(raw) {
 function mapProduct(r) {
     return {
         id: r.id, name: r.name, price: Number(r.price), category: r.category, image: r.image,
+        description: r.description || '',
         categories: String(r.category || '').split(',').map(c => c.trim().toLowerCase()).filter(Boolean),
         sizes: String(r.sizes || '').split(',').map(s => s.trim()).filter(Boolean),
         // Colors preserve their display case; only colorImages keys are lowercased for lookups
@@ -429,17 +450,17 @@ app.patch('/api/orders/:id', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/products', requireAdmin, async (req, res) => {
-    const { name, price, image, category, sizes, colors, stock, images, colorImages } = req.body || {};
+    const { name, price, image, category, sizes, colors, stock, images, colorImages, description } = req.body || {};
     if (!name || !price || !image) return res.status(400).json({ error: 'Missing product fields' });
     try {
         const imgJson = normImages(images) || '[]';
         const ciJson = normColorImages(colorImages) || '{}';
         const r = await pool.query(
-            `INSERT INTO products (name, price, category, image, sizes, colors, stock, images, color_images)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            `INSERT INTO products (name, price, category, image, sizes, colors, stock, images, color_images, description)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              RETURNING *, to_char(created_at, 'YYYY-MM-DD') AS created`,
             [String(name).slice(0, 100), Number(price), String(category || '').toLowerCase().slice(0, 30), image,
-             normList(sizes), normList(colors), normStock(stock), imgJson, ciJson]);
+             normList(sizes), normList(colors), normStock(stock), imgJson, ciJson, String(description || '').slice(0, 3000)]);
         res.status(201).json(mapProduct(r.rows[0]));
     } catch (e) {
         console.error('Create product error:', e.message);
@@ -450,7 +471,7 @@ app.post('/api/products', requireAdmin, async (req, res) => {
 app.patch('/api/products/:id', requireAdmin, async (req, res) => {
     try {
         const id = Number(req.params.id);
-        const { name, price, image, category, sizes, colors, stock, images, colorImages } = req.body || {};
+        const { name, price, image, category, sizes, colors, stock, images, colorImages, description } = req.body || {};
         const r = await pool.query('SELECT * FROM products WHERE id = $1', [id]);
         if (r.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
         const p = r.rows[0];
@@ -464,12 +485,13 @@ app.patch('/api/products/:id', requireAdmin, async (req, res) => {
             colors: colors !== undefined ? normList(colors) : p.colors,
             stock: stock !== undefined ? normStock(stock) : (p.stock ?? null),
             images: normImages(images) || (p.images || '[]'),
-            colorImages: ciJson !== null ? ciJson : (p.color_images || '{}')
+            colorImages: ciJson !== null ? ciJson : (p.color_images || '{}'),
+            description: description !== undefined ? String(description).slice(0, 3000) : (p.description || '')
         };
         const u = await pool.query(
-            `UPDATE products SET name = $1, price = $2, image = $3, category = $4, sizes = $5, colors = $6, stock = $7, images = $8, color_images = $9
-             WHERE id = $10 RETURNING *, to_char(created_at, 'YYYY-MM-DD') AS created`,
-            [merged.name, merged.price, merged.image, merged.category, merged.sizes, merged.colors, merged.stock, merged.images, merged.colorImages, id]);
+            `UPDATE products SET name = $1, price = $2, image = $3, category = $4, sizes = $5, colors = $6, stock = $7, images = $8, color_images = $9, description = $10
+             WHERE id = $11 RETURNING *, to_char(created_at, 'YYYY-MM-DD') AS created`,
+            [merged.name, merged.price, merged.image, merged.category, merged.sizes, merged.colors, merged.stock, merged.images, merged.colorImages, merged.description, id]);
         res.json(mapProduct(u.rows[0]));
     } catch (e) {
         console.error('Update product error:', e.message);

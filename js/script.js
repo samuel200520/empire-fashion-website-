@@ -139,6 +139,13 @@ function isNewProduct(product) {
 function productCardHTML(product) {
     const index = storeProducts.indexOf(product);
     const soldOut = product.stock !== null && product.stock <= 0;
+    const avail = !soldOut
+        ? (product.stock === null || product.stock === undefined
+            ? '<span class="avail">Available</span>'
+            : product.stock <= 5
+                ? `<span class="avail low">Only ${product.stock} left</span>`
+                : '<span class="avail">In stock</span>')
+        : '';
     const colors = product.colors || [];
     const wished = wishlist.includes(product.id);
     const colorDots = colors.length > 0
@@ -154,6 +161,7 @@ function productCardHTML(product) {
             </div>
             <h3 class="product-title" onclick="openProduct(${product.id})">${esc(product.name)}</h3>
             <p class="price">NLE ${esc(product.price)}</p>
+            ${avail}
             ${colorDots}
             <button class="add-to-cart" onclick="quickAdd(${index})" ${soldOut ? 'disabled' : ''}>
                 ${soldOut ? 'Sold Out' : 'Add to Cart'}
@@ -180,7 +188,8 @@ function applyFilters() {
         list = list.filter(p =>
             (p.name || '').toLowerCase().includes(t) ||
             (p.categories || (p.category || '').split(',')).some(c => c.toLowerCase().includes(t)) ||
-            (p.colors || []).some(c => c.toLowerCase().includes(t))
+            (p.colors || []).some(c => c.toLowerCase().includes(t)) ||
+            (p.description || '').toLowerCase().includes(t)
         );
     }
     if (currentSort === 'newest') list.sort((a, b) => String(b.created || '').localeCompare(String(a.created || '')));
@@ -412,10 +421,20 @@ function openCategory(category) {
     scrollToProducts();
 }
 
+// Friendly display names for the catalogue categories
+const CATEGORY_LABELS = {
+    'clothing': 'Clothing',
+    'shoes': 'Shoes',
+    'school-supplies': 'School Supplies',
+    'ladies-accessories': "Ladies' Accessories",
+    'other': 'Other Goods'
+};
+
 function filterByCategory(category) {
     currentCategory = category;
     const title = document.getElementById('collection-title');
-    title.textContent = category === 'all' ? 'Featured Products' : `${category.charAt(0).toUpperCase() + category.slice(1)} Collection`;
+    const label = CATEGORY_LABELS[category] || (category.charAt(0).toUpperCase() + category.slice(1));
+    title.textContent = category === 'all' ? 'Featured Products' : `${label} Collection`;
 
     applyFilters();
 
@@ -448,6 +467,8 @@ function renderProduct(id) {
     setImage(document.getElementById('pd-image'), p.image, p.name);
     document.getElementById('pd-name').innerText = p.name;
     document.getElementById('pd-price').innerText = 'NLE ' + p.price;
+    const descEl = document.getElementById('pd-desc');
+    if (descEl) descEl.innerHTML = p.description ? esc(p.description) : '';
     document.getElementById('pd-link').innerText = location.origin + '/#product=' + p.id;
 
     // Photo gallery: main image + per-color photos + extra shots

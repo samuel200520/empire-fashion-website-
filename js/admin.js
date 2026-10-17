@@ -490,6 +490,7 @@ function startEditProduct(id) {
     document.getElementById('product-edit-id').value = id;
     document.getElementById('product-name').value = product.name;
     document.getElementById('product-price').value = product.price;
+    document.getElementById('product-description').value = product.description || '';
     setSelectedCategories(product.category ? String(product.category).split(',') : []);
     document.getElementById('product-sizes').value = (product.sizes || []).join(', ');
     document.getElementById('product-stock').value = product.stock ?? '';
@@ -676,6 +677,7 @@ async function submitProduct(name, price, image, colorImages) {
     const editId = document.getElementById('product-edit-id').value;
     const sizes = document.getElementById('product-sizes').value;
     const stock = document.getElementById('product-stock').value;
+    const description = document.getElementById('product-description').value;
     const categories = getSelectedCategories();
     const cleanColors = colorRows.map(r => r.name.trim()).filter(Boolean);
     // If no main image was picked, fall back to the first color photo (if any)
@@ -683,7 +685,7 @@ async function submitProduct(name, price, image, colorImages) {
         image = colorImages[cleanColors[0]] || Object.values(colorImages)[0];
     }
     if (editId) {
-        const body = { name, price, category: categories.join(','), sizes, colors: cleanColors.join(','), stock, images: [] };
+        const body = { name, price, category: categories.join(','), sizes, colors: cleanColors.join(','), stock, description, images: [] };
         if (image) body.image = image;
         if (colorImages) body.colorImages = colorImages;
         const res = await fetch(`${API_URL}/api/products/${editId}`, {
@@ -701,7 +703,7 @@ async function submitProduct(name, price, image, colorImages) {
         const res = await fetch(`${API_URL}/api/products`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, price, category: categories.join(','), image, sizes, colors: cleanColors.join(','), stock, images: [], colorImages: colorImages || {} })
+            body: JSON.stringify({ name, price, category: categories.join(','), image, sizes, colors: cleanColors.join(','), stock, description, images: [], colorImages: colorImages || {} })
         });
         if (!res.ok) throw new Error(await serverError(res));
         showToast('Product saved to database!');

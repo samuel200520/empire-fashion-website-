@@ -50,18 +50,21 @@ function placeholderImage(name) {
 }
 
 const SEED_PRODUCTS = [
-    { name: 'Nike Air Force 1', price: 300, category: 'shoes', sizes: ['39', '40', '41', '42', '43', '44'], colors: ['White', 'Black', 'Gold'], stock: 8 },
-    { name: 'Classic Black Bomber Jacket', price: 850, category: 'men', sizes: ['S', 'M', 'L', 'XL'], colors: ['Black'], stock: 5 },
-    { name: 'Emperor Luxury Tee', price: 180, category: 'men', sizes: ['S', 'M', 'L', 'XL'], colors: ['Black', 'White', 'Gold'], stock: 12 },
-    { name: 'Slim-Fit Denim Jeans', price: 420, category: 'men', sizes: ['30', '32', '34', '36'], colors: ['Blue', 'Black'], stock: 7 },
-    { name: 'Regina Elegant Dress', price: 690, category: 'women', sizes: ['S', 'M', 'L'], colors: ['Wine', 'Black', 'Cream'], stock: 4 },
-    { name: 'Silk Luxe Scarf', price: 120, category: 'women', sizes: [''], colors: ['Gold', 'Cream'], stock: null },
-    { name: 'Classic Shoulder Handbag', price: 540, category: 'women', sizes: [''], colors: ['Black', 'Brown', 'Beige'], stock: 6 },
-    { name: 'Air Jordan Retro 4', price: 520, category: 'shoes', sizes: ['40', '41', '42', '43', '44'], colors: ['Black', 'Red', 'White'], stock: 6 },
-    { name: 'Premium Leather Oxfords', price: 610, category: 'shoes', sizes: ['40', '41', '42', '43', '44'], colors: ['Brown', 'Black'], stock: 5 },
-    { name: 'Gold Chain Necklace', price: 250, category: 'accessories', sizes: [''], colors: ['Gold'], stock: null },
-    { name: 'Champion Snapback Cap', price: 95, category: 'accessories', sizes: [''], colors: ['Black', 'Gold', 'Navy'], stock: 15 },
-    { name: 'Luxury Aviator Sunglasses', price: 200, category: 'accessories', sizes: [''], colors: ['Gold', 'Black'], stock: 9 }
+    { name: 'Nike Air Force 1', price: 300, category: 'shoes', sizes: ['39', '40', '41', '42', '43', '44'], colors: ['White', 'Black', 'Gold'], stock: 8, description: 'The timeless classic. Clean leather uppers, cushioned sole and a look that never goes out of style.' },
+    { name: 'Classic Black Bomber Jacket', price: 850, category: 'clothing', sizes: ['S', 'M', 'L', 'XL'], colors: ['Black'], stock: 5, description: 'Premium black bomber with ribbed cuffs and a modern slim fit. A wardrobe essential for every season.' },
+    { name: 'Emperor Luxury Tee', price: 180, category: 'clothing', sizes: ['S', 'M', 'L', 'XL'], colors: ['Black', 'White', 'Gold'], stock: 12, description: 'Soft 100% cotton tee with a bold gold crown print. Comfortable, breathable and built to last.' },
+    { name: 'Slim-Fit Denim Jeans', price: 420, category: 'clothing', sizes: ['30', '32', '34', '36'], colors: ['Blue', 'Black'], stock: 7, description: 'Stretch slim-fit denim with a clean finish. Pair it with anything for an effortless everyday look.' },
+    { name: 'Regina Elegant Dress', price: 690, category: 'clothing', sizes: ['S', 'M', 'L'], colors: ['Wine', 'Black', 'Cream'], stock: 4, description: 'An elegant figure-hugging dress, perfect for weddings, parties and special occasions.' },
+    { name: 'Silk Luxe Scarf', price: 120, category: 'ladies-accessories', sizes: [''], colors: ['Gold', 'Cream'], stock: null, description: 'Smooth luxury silk scarf. Lightweight and versatile — wear it around your neck, waist or bag.' },
+    { name: 'Classic Shoulder Handbag', price: 540, category: 'ladies-accessories', sizes: [''], colors: ['Black', 'Brown', 'Beige'], stock: 6, description: 'Chic shoulder handbag with a structured shape and a spacious interior. Stylish enough for every day.' },
+    { name: 'Air Jordan Retro 4', price: 520, category: 'shoes', sizes: ['40', '41', '42', '43', '44'], colors: ['Black', 'Red', 'White'], stock: 6, description: 'Retro basketball icon with premium leather and visible Air cushioning. A must-have for sneakerheads.' },
+    { name: 'Premium Leather Oxfords', price: 610, category: 'shoes', sizes: ['40', '41', '42', '43', '44'], colors: ['Brown', 'Black'], stock: 5, description: 'Hand-finished leather oxfords for work or smart occasions. Polished, durable and comfortable.' },
+    { name: 'Gold Chain Necklace', price: 250, category: 'ladies-accessories', sizes: [''], colors: ['Gold'], stock: null, description: 'Shiny gold-tone chain necklace with a secure clasp. Adds a touch of luxury to any outfit.' },
+    { name: 'Champion Snapback Cap', price: 95, category: 'other', sizes: [''], colors: ['Black', 'Gold', 'Navy'], stock: 15, description: 'Classic snapback cap with an embroidered front. Adjustable fit for all head sizes.' },
+    { name: 'Luxury Aviator Sunglasses', price: 200, category: 'other', sizes: [''], colors: ['Gold', 'Black'], stock: 9, description: 'Stylish aviator sunglasses with UV400 protection. Look sharp while shielding your eyes.' },
+    { name: 'A5 Exercise Books (Pack of 4)', price: 40, category: 'school-supplies', sizes: [''], colors: ['Blue'], stock: 100, description: 'Quality A5 exercise books, 80 pages each. Perfect for class notes and homework.' },
+    { name: 'Geometry Set', price: 25, category: 'school-supplies', sizes: [''], colors: ['White'], stock: 60, description: 'Complete geometry set — compass, ruler, protractor and set squares in a sturdy case.' },
+    { name: 'School Backpack', price: 180, category: 'school-supplies', sizes: [''], colors: ['Black', 'Blue', 'Red'], stock: 20, description: 'Durable padded backpack with multiple compartments. Room for books, stationery and a laptop.' }
 ];
 
 (async () => {
@@ -80,17 +83,19 @@ const SEED_PRODUCTS = [
             const stock = p.stock === null || p.stock === undefined ? null : p.stock;
             if (existing.rows.length > 0) {
                 await client.query(
-                    'UPDATE products SET category = $1, sizes = $2, colors = $3, stock = COALESCE($4, stock) WHERE id = $5',
-                    [p.category, sizes, colors, stock, existing.rows[0].id]);
+                    `UPDATE products SET category = $1, sizes = $2, colors = $3, stock = COALESCE($4, stock),
+                     description = COALESCE(NULLIF($5, ''), description) WHERE id = $6`,
+                    [p.category, sizes, colors, stock, p.description || '', existing.rows[0].id]);
                 updated++;
             } else {
                 await client.query(
-                    'INSERT INTO products (name, price, category, image, sizes, colors, stock) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-                    [p.name, p.price, p.category, placeholderImage(p.name), sizes, colors, stock]);
+                    `INSERT INTO products (name, price, category, image, sizes, colors, stock, description)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    [p.name, p.price, p.category, placeholderImage(p.name), sizes, colors, stock, p.description || '']);
                 added++;
             }
         }
-        console.log(`Seed complete: ${added} products added, ${updated} updated across men/women/shoes/accessories.`);
+        console.log(`Seed complete: ${added} products added, ${updated} updated across clothing/shoes/school-supplies/ladies-accessories/other.`);
         console.log('Log in at /login.html (default admin / empire123) to add real product photos.');
     } catch (e) {
         console.error('Seed error:', e.message);

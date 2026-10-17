@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Empire Fashion House — Premium Fashion in Freetown, Sierra Leone</title>
-    <meta name="description" content="Empire Fashion House — Sierra Leone's premier destination for premium streetwear and luxury fashion. Shop sneakers, clothing and accessories. Cash on Delivery & Monime payments. Delivery in Freetown and beyond.">
+    <meta name="description" content="Empire Fashion House — shop clothing, shoes, school supplies and ladies' accessories in Freetown, Sierra Leone. Cash on Delivery & Monime payments. Delivery in Freetown and beyond.">
     <meta property="og:title" content="Empire Fashion House">
-    <meta property="og:description" content="Redefining style. Wear the crown. Premium fashion delivered in Sierra Leone.">
+    <meta property="og:description" content="Redefining style. Wear the crown. Clothing, shoes, school supplies & accessories — delivered across Sierra Leone.">
     <meta property="og:type" content="website">
     <meta property="og:image" content="assets/images/logo.jpeg">
     <link rel="icon" type="image/jpeg" href="assets/images/logo.jpeg">
@@ -24,10 +24,11 @@
         <nav id="main-nav">
             <ul>
                 <li><a href="#" data-category="all">Home</a></li>
-                <li><a href="#" data-category="men">Men</a></li>
-                <li><a href="#" data-category="women">Women</a></li>
+                <li><a href="#" data-category="clothing">Clothing</a></li>
                 <li><a href="#" data-category="shoes">Shoes</a></li>
-                <li><a href="#" data-category="accessories">Accessories</a></li>
+                <li><a href="#" data-category="school-supplies">School Supplies</a></li>
+                <li><a href="#" data-category="ladies-accessories">Ladies&#39; Accessories</a></li>
+                <li><a href="#" data-category="other">Other Goods</a></li>
             </ul>
         </nav>
         <div class="header-actions">
@@ -40,10 +41,11 @@
     <!-- Mobile Nav Dropdown -->
     <div id="mobile-nav" class="mobile-nav">
         <a href="#" data-category="all" class="mobile-nav-link">Home</a>
-        <a href="#" data-category="men" class="mobile-nav-link">Men</a>
-        <a href="#" data-category="women" class="mobile-nav-link">Women</a>
+        <a href="#" data-category="clothing" class="mobile-nav-link">Clothing</a>
         <a href="#" data-category="shoes" class="mobile-nav-link">Shoes</a>
-        <a href="#" data-category="accessories" class="mobile-nav-link">Accessories</a>
+        <a href="#" data-category="school-supplies" class="mobile-nav-link">School Supplies</a>
+        <a href="#" data-category="ladies-accessories" class="mobile-nav-link">Ladies&#39; Accessories</a>
+        <a href="#" data-category="other" class="mobile-nav-link">Other Goods</a>
     </div>
 
     <!-- Hero -->
@@ -55,7 +57,7 @@
                 <p class="hero-sub">Premium streetwear, sneakers &amp; accessories — handpicked for Freetown and delivered to your doorstep. Pay with Cash on Delivery or Monime.</p>
                 <div class="hero-actions">
                     <button class="btn-gold" onclick="scrollToProducts()">Shop Now</button>
-                    <button class="btn-outline-dark" onclick="openCategory('men')">Explore Men</button>
+                    <button class="btn-outline-dark" onclick="openCategory('clothing')">Explore Clothing</button>
                 </div>
                 <div class="hero-offer">
                     <span class="offer-chip">🔥 Special Offer</span>
@@ -94,14 +96,9 @@
             <h2>Find Your Fit</h2>
         </div>
         <div class="category-grid">
-            <a href="#products-section" class="cat-tile cat-men" onclick="openCategory('men'); return false;">
-                <span class="cat-icon">🧢</span>
-                <span class="cat-name">Men</span>
-                <span class="cat-cta">Shop Collection →</span>
-            </a>
-            <a href="#products-section" class="cat-tile cat-women" onclick="openCategory('women'); return false;">
-                <span class="cat-icon">👗</span>
-                <span class="cat-name">Women</span>
+            <a href="#products-section" class="cat-tile cat-clothing" onclick="openCategory('clothing'); return false;">
+                <span class="cat-icon">👕</span>
+                <span class="cat-name">Clothing</span>
                 <span class="cat-cta">Shop Collection →</span>
             </a>
             <a href="#products-section" class="cat-tile cat-shoes" onclick="openCategory('shoes'); return false;">
@@ -109,9 +106,19 @@
                 <span class="cat-name">Shoes</span>
                 <span class="cat-cta">Shop Collection →</span>
             </a>
-            <a href="#products-section" class="cat-tile cat-accessories" onclick="openCategory('accessories'); return false;">
-                <span class="cat-icon">🕶️</span>
-                <span class="cat-name">Accessories</span>
+            <a href="#products-section" class="cat-tile cat-school-supplies" onclick="openCategory('school-supplies'); return false;">
+                <span class="cat-icon">🎒</span>
+                <span class="cat-name">School Supplies</span>
+                <span class="cat-cta">Shop Collection →</span>
+            </a>
+            <a href="#products-section" class="cat-tile cat-ladies-accessories" onclick="openCategory('ladies-accessories'); return false;">
+                <span class="cat-icon">💍</span>
+                <span class="cat-name">Ladies&#39; Accessories</span>
+                <span class="cat-cta">Shop Collection →</span>
+            </a>
+            <a href="#products-section" class="cat-tile cat-other" onclick="openCategory('other'); return false;">
+                <span class="cat-icon">📦</span>
+                <span class="cat-name">Other Goods</span>
                 <span class="cat-cta">Shop Collection →</span>
             </a>
         </div>
@@ -124,7 +131,7 @@
         </div>
         <div class="store-controls">
             <div class="store-search">
-                <input type="text" id="store-search" placeholder="🔍 Search products, colors...">
+                <input type="text" id="store-search" placeholder="🔍 Search products, colors, description...">
             </div>
             <select id="sort-select" class="sort-select">
                 <option value="featured">Sort: Featured</option>
@@ -165,10 +172,11 @@
             <div class="footer-col">
                 <h3>Quick Links</h3>
                 <a href="#">Home</a>
-                <a href="#" data-category="men">Men</a>
-                <a href="#" data-category="women">Women</a>
+                <a href="#" data-category="clothing">Clothing</a>
                 <a href="#" data-category="shoes">Shoes</a>
-                <a href="#" data-category="accessories">Accessories</a>
+                <a href="#" data-category="school-supplies">School Supplies</a>
+                <a href="#" data-category="ladies-accessories">Ladies' Accessories</a>
+                <a href="#" data-category="other">Other Goods</a>
                 <a href="track.html">📦 Track Your Order</a>
             </div>
             <div class="footer-col">
@@ -204,6 +212,7 @@
             <div class="pd-info">
                 <h2 id="pd-name"></h2>
                 <p class="pd-price" id="pd-price"></p>
+                <p id="pd-desc" class="pd-desc"></p>
                 <button type="button" id="pd-heart" class="heart-btn" onclick="toggleWishlist(pdProduct && pdProduct.id, event)" title="Save to wishlist">♡</button>
                 <div id="pd-sizes-wrap">
                     <label>Select Size</label>
