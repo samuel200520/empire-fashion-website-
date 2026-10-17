@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
 const pgSession = require('connect-pg-simple')(session);
+const { translateCategory, safeEqual } = require('./lib/catalogue');
 
 // Load .env for local development (Render sets real env vars instead)
 const envFile = path.join(__dirname, '.env');
@@ -108,6 +109,10 @@ app.use(session({
     saveUninitialized: false,
     cookie: { httpOnly: true, sameSite: 'lax', secure: IS_PROD, maxAge: 1000 * 60 * 60 * 8 }
 }));
+
+if (IS_PROD && !process.env.MONIME_WEBHOOK_SECRET) {
+    console.warn('WARNING: MONIME_WEBHOOK_SECRET is not set. Payment webhooks are NOT secret-verified — set it and add the header in your Monime webhook (customHeaders: x-empire-secret) to lock down /api/monime/webhook.');
+}
 
 // ---- Database schema + one-time import from the old db.json ----
 async function initDb() {
@@ -219,13 +224,9 @@ async function initDb() {
     // new multi-goods taxonomy (clothing / shoes / school-supplies / ladies-accessories / other).
     // Idempotent — legacy tokens no longer exist after the first run.
     try {
-        const legacyMap = { men: 'clothing', women: 'clothing', accessories: 'other', uncategorized: 'other' };
         const { rows: catRows } = await pool.query('SELECT id, category FROM products');
         for (const r of catRows) {
-            const next = String(r.category || '').split(',')
-                .map(c => legacyMap[String(c).trim().toLowerCase()] || c)
-                .filter(Boolean)
-                .join(',');
+            const next = translateCategory(r.category);
             if (next !== String(r.category || '')) {
                 await pool.query('UPDATE products SET category = $1 WHERE id = $2', [next, r.id]);
             }
@@ -758,8 +759,22 @@ app.post('/api/checkout/monime', async (req, res) => {
 });
 
 // Monime webhook: payment confirmed -> mark order as Paid
+// Hardened: optional shared-secret header (opt-in via MONIME_WEBHOOK_SECRET),
+// and only Monime-checkout orders that are still Pending can ever be marked Paid.
 app.post('/api/monime/webhook', async (req, res) => {
     console.log('Monime webhook received:', JSON.stringify(req.body).slice(0, 500));
+
+    // Optional shared-secret check. When set, configure Monime to send the same
+    // value to this webhook as a custom header (e.g. x-empire-secret) or via
+    // verificationMethod.hmac256. Requests without a matching header are rejected.
+    const webhookSecret = process.env.MONIME_WEBHOOK_SECRET;
+    if (webhookSecret) {
+        const sent = req.get('x-empire-secret') || req.get('x-webhook-secret') ||
+            req.get('x-monime-secret') || req.get('x-callback-token') || '';
+        if (!safeEqual(String(sent), String(webhookSecret))) {
+            return res.status(401).json({ error: 'Invalid webhook signature' });
+        }
+    }
 
     try {
         const eventName = req.body?.event?.name;
@@ -770,20 +785,23 @@ app.post('/api/monime/webhook', async (req, res) => {
 
         if (eventName === 'checkout_session.completed' && status === 'completed') {
             let orderId = null;
-            if (callbackState) {
-                const byState = await pool.query('SELECT id FROM orders WHERE id = $1 AND status = $2', [Number(callbackState), 'Pending']);
-                if (byState.rows.length > 0) orderId = byState.rows[0].id;
-            }
-            if (orderId === null && sessionId) {
-                const bySession = await pool.query('SELECT id FROM orders WHERE monime_session_id = $1', [sessionId]);
+            if (sessionId) {
+                // 1) Prefer the exact Monime session id we stored when the checkout was created.
+                const bySession = await pool.query(
+                    `SELECT id FROM orders
+                     WHERE monime_session_id = $1 AND payment_method = $2 AND status = $3`,
+                    [String(sessionId).slice(0, 120), 'monime', 'Pending']);
                 if (bySession.rows.length > 0) orderId = bySession.rows[0].id;
             }
-            if (orderId === null && orderNumber) {
-                const num = String(orderNumber).replace(/^EMP/, '');
-                if (/^\d+$/.test(num)) {
-                    const byNum = await pool.query('SELECT id FROM orders WHERE id = $1', [Number(num)]);
-                    if (byNum.rows.length > 0) orderId = byNum.rows[0].id;
-                }
+            // 2) Fallback: callbackState must reference a *Monime* pending order that
+            //    has not recorded a session id yet. COD orders are never touched here.
+            if (orderId === null && callbackState && /^\d+$/.test(String(callbackState))) {
+                const byState = await pool.query(
+                    `SELECT id FROM orders
+                     WHERE id = $1 AND payment_method = $2 AND status = $3
+                       AND (monime_session_id = '' OR monime_session_id IS NULL)`,
+                    [Number(callbackState), 'monime', 'Pending']);
+                if (byState.rows.length > 0) orderId = byState.rows[0].id;
             }
 
             if (orderId !== null) {

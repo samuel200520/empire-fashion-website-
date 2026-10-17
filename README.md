@@ -54,6 +54,7 @@ Vanilla HTML/CSS/JS storefront with an **Express + PostgreSQL** backend. No buil
 | `SESSION_SECRET` | ✅ in prod | Long random string; generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 | `ADMIN_USER` | | Admin username created on first boot (default `admin`) |
 | `MONIME_TOKEN`, `MONIME_SPACE` | for Monime | Payment gateway credentials — leave blank to disable card/mobile-money checkout |
+| `MONIME_WEBHOOK_SECRET` | for Monime | Shared secret for payment webhooks (sent as the `x-empire-secret` custom header). Strongly recommended — without it, forged webhooks could mark orders as Paid |
 | `PORT` | | Server port (Render sets this) |
 | `NODE_ENV` | in prod | `production` enables Secure cookies + trusting the hosting proxy |
 
@@ -61,6 +62,7 @@ Vanilla HTML/CSS/JS storefront with an **Express + PostgreSQL** backend. No buil
 
 - `npm start` — run the server
 - `npm run seed` — idempotent demo-catalog loader (safe to re-run)
+- `npm test` — run the unit test suite (no database required)
 
 ## Deploying to Render
 
@@ -86,4 +88,7 @@ Manual setup is equally simple:
 - Admin login is throttled (10 tries / 15 min per IP).
 - Sessions live in PostgreSQL, so logins survive restarts — important on free-tier
   hosting where the server sleeps.
+- Payment webhooks require a shared secret (`MONIME_WEBHOOK_SECRET`) once configured,
+  and can only mark **Monime-checkout** orders as Paid — Cash-on-Delivery orders
+  are never touched by the webhook.
 - The admin credentials above are the **only** default secrets; rotate them before going live.
