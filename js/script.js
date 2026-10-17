@@ -406,10 +406,16 @@ function scrollToProducts() {
     document.getElementById('products-section').scrollIntoView({ behavior: 'smooth' });
 }
 
+// Filter a category AND scroll down to the product grid (used by hero + category tiles)
+function openCategory(category) {
+    filterByCategory(category);
+    scrollToProducts();
+}
+
 function filterByCategory(category) {
     currentCategory = category;
     const title = document.getElementById('collection-title');
-    title.textContent = category === 'all' ? 'Featured Collection' : `${category.charAt(0).toUpperCase() + category.slice(1)} Collection`;
+    title.textContent = category === 'all' ? 'Featured Products' : `${category.charAt(0).toUpperCase() + category.slice(1)} Collection`;
 
     applyFilters();
 
@@ -782,7 +788,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchInput.addEventListener('input', function () {
             searchTerm = this.value.trim();
             currentCategory = 'all';
-            document.getElementById('collection-title').textContent = 'Featured Collection';
+            document.getElementById('collection-title').textContent = 'Featured Products';
             applyFilters();
         });
     }

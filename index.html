@@ -10,6 +10,9 @@
     <meta property="og:type" content="website">
     <meta property="og:image" content="assets/images/logo.jpeg">
     <link rel="icon" type="image/jpeg" href="assets/images/logo.jpeg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Cormorant+Garamond:ital,wght@1,500;1,600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -43,14 +46,82 @@
         <a href="#" data-category="accessories" class="mobile-nav-link">Accessories</a>
     </div>
 
+    <!-- Hero -->
     <section class="hero">
-        <h1>EMPIRE FASHION HOUSE</h1>
-        <p>Redefining style. Wear the crown.</p>
-        <button onclick="scrollToProducts()">Shop Now</button>
+        <div class="hero-inner">
+            <div class="hero-text">
+                <p class="hero-eyebrow">A Modern Retail</p>
+                <h1>Elevate Your Daily <em>Lifestyle</em></h1>
+                <p class="hero-sub">Premium streetwear, sneakers &amp; accessories — handpicked for Freetown and delivered to your doorstep. Pay with Cash on Delivery or Monime.</p>
+                <div class="hero-actions">
+                    <button class="btn-gold" onclick="scrollToProducts()">Shop Now</button>
+                    <button class="btn-outline-dark" onclick="openCategory('men')">Explore Men</button>
+                </div>
+                <div class="hero-offer">
+                    <span class="offer-chip">🔥 Special Offer</span>
+                    <span class="offer-note">Use code <strong>FREETOWN10</strong> for 10% off your first order</span>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <img src="assets/images/homep.jpg" alt="Empire Fashion House — premium fashion in Freetown">
+                <div class="hero-badge">
+                    <span class="badge-kicker">New Drops</span>
+                    <span class="badge-title">Fresh fits every week</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Special Offer Band -->
+    <section class="offer-band">
+        <div class="offer-band-inner">
+            <div class="offer-text">
+                <p class="offer-eyebrow">✦ Special Offer</p>
+                <h2>Get <em>10% off</em> your first order</h2>
+                <p>Enter the code at checkout — it works on everything in the store.</p>
+            </div>
+            <div class="offer-cta">
+                <div class="offer-code">FREETOWN10</div>
+                <button class="btn-gold" onclick="scrollToProducts()">Shop Our Products →</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Shop by Category -->
+    <section class="categories-section">
+        <div class="category-header">
+            <p class="section-eyebrow">Shop by Category</p>
+            <h2>Find Your Fit</h2>
+        </div>
+        <div class="category-grid">
+            <a href="#products-section" class="cat-tile cat-men" onclick="openCategory('men'); return false;">
+                <span class="cat-icon">🧢</span>
+                <span class="cat-name">Men</span>
+                <span class="cat-cta">Shop Collection →</span>
+            </a>
+            <a href="#products-section" class="cat-tile cat-women" onclick="openCategory('women'); return false;">
+                <span class="cat-icon">👗</span>
+                <span class="cat-name">Women</span>
+                <span class="cat-cta">Shop Collection →</span>
+            </a>
+            <a href="#products-section" class="cat-tile cat-shoes" onclick="openCategory('shoes'); return false;">
+                <span class="cat-icon">👟</span>
+                <span class="cat-name">Shoes</span>
+                <span class="cat-cta">Shop Collection →</span>
+            </a>
+            <a href="#products-section" class="cat-tile cat-accessories" onclick="openCategory('accessories'); return false;">
+                <span class="cat-icon">🕶️</span>
+                <span class="cat-name">Accessories</span>
+                <span class="cat-cta">Shop Collection →</span>
+            </a>
+        </div>
     </section>
 
     <div class="products-container" id="products-section">
-        <h2 id="collection-title">Featured Collection</h2>
+        <div class="section-head products-head">
+            <p class="section-eyebrow">The Collection</p>
+            <h2 id="collection-title">Featured Products</h2>
+        </div>
         <div class="store-controls">
             <div class="store-search">
                 <input type="text" id="store-search" placeholder="🔍 Search products, colors...">
@@ -67,10 +138,20 @@
 
     <!-- About Section -->
     <section class="about-section">
-        <div class="about-content">
-            <h2>About Empire Fashion House</h2>
-            <p>Empire Fashion House is Sierra Leone's premier destination for premium streetwear and luxury fashion. We believe style is a statement — that's why every piece in our collection is handpicked to help you own your crown.</p>
-            <p>From classic sneakers to bold fits, we bring the world's best brands and our own exclusive drops straight to your doorstep in Freetown and beyond.</p>
+        <div class="about-grid">
+            <div class="about-copy">
+                <p class="section-eyebrow">The Empire Standard</p>
+                <h2>About Empire Fashion House</h2>
+                <p>Empire Fashion House is Sierra Leone's premier destination for premium streetwear and luxury fashion. We believe style is a statement — that's why every piece in our collection is handpicked to help you own your crown.</p>
+                <p>From classic sneakers to bold fits, we bring the world's best brands and our own exclusive drops straight to your doorstep in Freetown and beyond.</p>
+                <a class="btn-outline-dark" href="track.html">📦 Track Your Order</a>
+            </div>
+            <div class="about-stats">
+                <div class="stat"><span class="stat-num">100%</span><span class="stat-label">Authentic Pieces</span></div>
+                <div class="stat"><span class="stat-num">COD</span><span class="stat-label">&amp; Monime Payments</span></div>
+                <div class="stat"><span class="stat-num">Freetown</span><span class="stat-label">&amp; Nationwide Delivery</span></div>
+                <div class="stat"><span class="stat-num">WhatsApp</span><span class="stat-label">Ordering Available</span></div>
+            </div>
         </div>
     </section>
 
